@@ -24,9 +24,9 @@ function CustomerNavbar() {
     const [cart, setCart] = useState(
         [
             { 'item_id': 123, 'name': ' item[1]', 'price': 55, 'quantity': 2 },
-            { 'item_id': 123, 'name': ' item[1]', 'price': 55, 'quantity': 2 },
-            { 'item_id': 123, 'name': ' item[1]', 'price': 55, 'quantity': 2 },
-            { 'item_id': 123, 'name': ' item[1]', 'price': 55, 'quantity': 2 },
+            { 'item_id': 12343, 'name': ' item[1]', 'price': 55, 'quantity': 2 },
+            { 'item_id': 1243, 'name': ' item[1]', 'price': 55, 'quantity': 2 },
+            { 'item_id': 1523, 'name': ' item[1]', 'price': 55, 'quantity': 2 },
         ])
     const user = { zip_code: 123 }
     const searchRestaurants = (value) => {
@@ -36,16 +36,6 @@ function CustomerNavbar() {
         setMatchingRestaurants(filtered);
     };
 
-    const getCustomerNotification = async () => {
-        try {
-            const res = await fetch(`http://localhost:5000/notifications/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
-            const data = await res.json()
-            console.log("customer notifications : ", data)
-            setNotifications(data)
-        } catch (error) {
-            console.log(error)
-        }
-    }
     const getAvailableRestaurants = async () => {
         // setRestaurants()
         try {
@@ -57,6 +47,18 @@ function CustomerNavbar() {
             setRestaurants(data)
         } catch (err) { console.log(err) }
     }
+
+    const getCustomerNotification = async () => {
+        try {
+            const res = await fetch(`http://localhost:5000/notifications/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
+            const data = await res.json()
+            console.log("customer notifications : ", data)
+            setNotifications(data)
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
     const getCartItems = async () => {
         try {
             const res = await fetch(`http://localhost:5000/cart/${localStorage.getItem("Customer_ID")}`)
@@ -65,6 +67,7 @@ function CustomerNavbar() {
             setCart(cartItems)
         } catch (error) { console.log(error) }
     }
+
     useEffect(() => {
         // getAvailableRestaurants();
         // getCustomerNotification();
