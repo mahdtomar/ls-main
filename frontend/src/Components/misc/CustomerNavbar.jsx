@@ -24,7 +24,7 @@ function CustomerNavbar() {
                 <div className="flex">
                     <div className="logo">Lieferspatz</div>
                     <ul className="flex">
-                        <Link to={'/'}>Home</Link>
+                        <Link to={'/customer-dashboard'}>Home</Link>
                         <Link>My Orders</Link>
                     </ul>
                 </div>

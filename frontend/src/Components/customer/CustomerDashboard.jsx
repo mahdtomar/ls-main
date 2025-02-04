@@ -39,7 +39,19 @@ const CustomerDashboard = () => {
     const data = await res.json()
     console.log(data)
   }
-  useEffect(() => { getCustomerOrders(); getWalletBalance(); getCustomerNotification(); }, [])
+  const checkSession = async() => {
+    try {
+      const res = await fetch(`http://localhost:5000/session`, {
+        method: "GET",
+        credentials: true,
+      })
+      const data = await res.json()
+      console.log("check session",data)
+    } catch (err) {
+      console.log(err)
+    }
+  }
+  useEffect(() => { getCustomerOrders(); getWalletBalance(); getCustomerNotification();checkSession(); }, [])
   return (
     <div className="container my-4">
       <div className="card">
