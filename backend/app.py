@@ -32,14 +32,21 @@ CORS(app,
 
 # 🔹 Session Configuration
 app.config["SECRET_KEY"] = "your_secure_random_secret_key"  # Keep your existing secret key
-app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_TYPE"] = "filesystem"  # ✅ Ensures sessions are stored persistently
+app.config["SESSION_PERMANENT"] = True  # ✅ Sessions persist across browser refresh
+app.config["SESSION_USE_SIGNER"] = True  # ✅ Adds extra security to session cookies
+app.config["SESSION_FILE_DIR"] = "./flask_session"  # ✅ Explicit directory for session files
+app.config["SESSION_FILE_THRESHOLD"] = 100  # ✅ Limits session file count to avoid overflow
+
 app.config.update(
-    SESSION_COOKIE_SECURE=False,  # Changed to False for development
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
-    PERMANENT_SESSION_LIFETIME=timedelta(minutes=60)
+    SESSION_COOKIE_SECURE=False,  # ✅ Set to False for local dev (Change to True in production)
+    SESSION_COOKIE_HTTPONLY=True,  # ✅ Prevents client-side JS from accessing cookies
+    SESSION_COOKIE_SAMESITE='Lax',  # ✅ Prevents CSRF while allowing same-site requests
+    PERMANENT_SESSION_LIFETIME=timedelta(days=7)  # ✅ Sessions last 7 days
 )
-Session(app)
+
+Session(app)  # ✅ Initializes Flask-Session
+
 
 @app.route('/')
 def home():
@@ -152,6 +159,7 @@ def create_restaurant():
         return jsonify({'error': str(e)}), 500
     
 # ✅ Restaurant login with session
+# ✅ Restaurant login with session
 @app.route('/restaurant/login', methods=['POST'])
 def login_restaurant():
     try:
@@ -173,6 +181,11 @@ def login_restaurant():
             session.permanent = True  
             session['user_id'] = restaurant[0]
             session['role'] = 'restaurant'
+
+            # 🔹 Force Flask to save session changes
+            session.modified = True  
+
+            print("✅ Session set:", dict(session))  # Debugging output
 
             return jsonify({'success': True, 'restaurant_id': restaurant[0]}), 200
         else:
@@ -208,12 +221,18 @@ def login_customer():
             session['user_id'] = customer[0]
             session['role'] = 'customer'
 
+            # 🔹 Force Flask to save session changes
+            session.modified = True  
+
+            print("✅ Session set:", dict(session))  # Debugging output
+
             return jsonify({'success': True, 'customer_id': customer[0]}), 200
         else:
             return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 
 
@@ -474,7 +493,7 @@ def remove_from_cart(customer_id):
         return jsonify({'error': str(e)}), 500
 
 
-#View Customer orders 
+# View Customer Orders (Now Includes Ordered Items)
 @app.route('/customer/orders', methods=['GET'])
 @login_required('customer')
 def customer_orders():
@@ -482,28 +501,83 @@ def customer_orders():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT * FROM orders WHERE customer_id = ?", (customer_id,))
+
+    # 🔹 Fetch all orders for the logged-in customer
+    cursor.execute("""
+        SELECT orders.id, orders.restaurant_id, orders.status, orders.timestamp, restaurants.name 
+        FROM orders
+        JOIN restaurants ON orders.restaurant_id = restaurants.id
+        WHERE orders.customer_id = ?
+    """, (customer_id,))
     orders = cursor.fetchall()
-    
+
+    # 🔹 Fetch ordered items for each order
+    order_list = []
+    for order in orders:
+        order_id, restaurant_id, status, timestamp, restaurant_name = order
+        
+        cursor.execute("""
+            SELECT item_name, quantity, item_price
+            FROM order_items
+            WHERE order_id = ?
+        """, (order_id,))
+        items = cursor.fetchall()
+
+        order_list.append({
+            "order_id": order_id,
+            "restaurant_name": restaurant_name,
+            "status": status,
+            "timestamp": timestamp,
+            "items": [{"name": item[0], "quantity": item[1], "price": item[2]} for item in items]
+        })
+
     conn.close()
-    return jsonify({'orders': orders}), 200
+    return jsonify({'orders': order_list}), 200
 
 
-#View Restaurant Orders
+
+# View Restaurant Orders (Now Includes Ordered Items & Customer Info)
 @app.route('/restaurant/orders', methods=['GET'])
 @login_required('restaurant')
 def restaurant_orders():
     restaurant_id = session['user_id']  # Get restaurant ID from session
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT * FROM orders WHERE restaurant_id = ?", (restaurant_id,))
+
+    # 🔹 Fetch all orders for this restaurant
+    cursor.execute("""
+        SELECT orders.id, orders.customer_id, orders.status, orders.timestamp, 
+               customers.first_name, customers.last_name
+        FROM orders
+        JOIN customers ON orders.customer_id = customers.id
+        WHERE orders.restaurant_id = ?
+    """, (restaurant_id,))
     orders = cursor.fetchall()
-    
+
+    # 🔹 Fetch ordered items for each order
+    order_list = []
+    for order in orders:
+        order_id, customer_id, status, timestamp, first_name, last_name = order
+        
+        cursor.execute("""
+            SELECT item_name, quantity, item_price
+            FROM order_items
+            WHERE order_id = ?
+        """, (order_id,))
+        items = cursor.fetchall()
+
+        order_list.append({
+            "order_id": order_id,
+            "customer_name": f"{first_name} {last_name}",
+            "status": status,
+            "timestamp": timestamp,
+            "items": [{"name": item[0], "quantity": item[1], "price": item[2]} for item in items]
+        })
+
     conn.close()
-    return jsonify({'orders': orders}), 200
+    return jsonify({'orders': order_list}), 200
+
 
 
 
