@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-
+import './scss/navbar.css'
 function CustomerNavbar() {
     const [inputValue, setInputValue] = useState("");
     const [matchingRestaurants, setMatchingRestaurants] = useState([]);

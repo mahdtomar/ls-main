@@ -1,6 +1,13 @@
 import React from "react";
 
 export default function LoginRestaurant() {
+  const handleSubmit = async () => {
+    const res = await fetch("http://localhost:5000/restaurant/login", {
+      method: "POST",
+      credentials: "include",
+      body: JSON.stringify({})
+    })
+  }
   return (
     <div className="d-flex justify-content-center align-items-center vh-100">
       <div className="card p-4 shadow" style={{ width: "400px" }}>

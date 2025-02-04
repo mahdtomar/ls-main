@@ -1,0 +1,21 @@
+nav {
+    margin-bottom: 20px;
+    .logo {
+        font-size: larger;
+        font-weight: bold;
+    }
+    ul {
+        a {
+            text-decoration: none;
+            display: block;
+            color: black;
+            border-bottom: 2px solid transparent;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: background-color 0.3s ease-in-out;
+            &:hover {
+                background-color: #eee;
+            }
+        }
+    }
+}
