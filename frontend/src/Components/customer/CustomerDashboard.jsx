@@ -43,7 +43,7 @@ const CustomerDashboard = () => {
     try {
       const res = await fetch(`http://localhost:5000/session`, {
         method: "GET",
-        credentials: true,
+        credentials: "include",
       })
       const data = await res.json()
       console.log("check session",data)
