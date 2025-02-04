@@ -9,9 +9,9 @@ const RestaurantNavbar = () => {
                     <div className="logo">Lieferspatz</div>
                     <ul className="flex">
                         <Link to={'/restaurant-dashboard'}>Home</Link>
-                        <Link>Orders</Link>
+                        <Link to={'/restaurant-orders'}>Orders</Link>
                         <Link to={'/restaurant-menu'}>Menu</Link>
-                        <Link>Order History</Link>
+                        <Link to={`/restaurant-orders-history`}>Order History</Link>
                     </ul>
                 </div>
                 <div className="flex">

@@ -4,6 +4,8 @@ import RestaurantDashboard from '../Components/restaurant/RestaurantDashboard'
 import LoginRestaurant from '../Components/LoginRestaurant'
 import SignupRestaurant from '../Components/SignupRestaurant'
 import RestaurantMenu from '../Components/restaurant/RestaurantMenu'
+import RestaurantPendingOrders from '../Components/restaurant/RestaurantPendingOrders'
+import RestaurantOrderHistory from '../Components/restaurant/RestaurantOrderHistory'
 
 const RestaurantRoutes = () => {
     return (
@@ -15,6 +17,8 @@ const RestaurantRoutes = () => {
                 element={<RestaurantDashboard />}
             />
             <Route path='/restaurant-menu' element={<RestaurantMenu />} />
+            <Route path='/restaurant-orders' element={<RestaurantPendingOrders />} />
+            <Route path='/restaurant-orders-history' element={<RestaurantOrderHistory />} />
         </Routes>
     )
 }

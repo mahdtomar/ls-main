@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import RestaurantMenuItem from './RestaurantMenuItem'
 import OrderLine from '../customer/OrderLine'
 import MenuItemForm from './MenuItemForm'
+import RestaurantOrderLine from './RestaurantOrderLine'
 
 const RestaurantDashboard = () => {
     const [menu, setMenu] = useState([])
@@ -36,7 +37,10 @@ const RestaurantDashboard = () => {
     return (
         <div>
             <div>
-                order management
+                pending order management
+                {orders.map(({ id, restaurant_id, status, timestamp, items }, i) => {
+                    return <RestaurantOrderLine key={i} id={id} restaurant_id={restaurant_id} status={status} timestamp={timestamp} items={items} />
+                })}
             </div>
             <div>
                 <h2>restaurant menu</h2>
@@ -51,7 +55,7 @@ const RestaurantDashboard = () => {
             <h2>restaurant orders</h2>
             <div>
                 {orders.map(({ id, restaurant_id, status, timestamp, items }, i) => {
-                    return <OrderLine key={i} id={id} restaurant_id={restaurant_id} status={status} timestamp={timestamp} items={items} />
+                    return <RestaurantOrderLine key={i} id={id} restaurant_id={restaurant_id} status={status} timestamp={timestamp} items={items} />
                 })}
             </div>
             <div>
@@ -59,7 +63,7 @@ const RestaurantDashboard = () => {
                 {/*  /wallet/restaurant/:restaurant_id */}
 
             </div>
-            <button>delete</button>
+            <button>logout</button>
         </div>
     )
 }

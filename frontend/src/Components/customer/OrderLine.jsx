@@ -7,10 +7,6 @@ const CustomerOrderLine = ({ id, restaurant_id, status, timestamp, items }) => {
             <span>{restaurant_id}</span>
             <span>{status}</span>
             <span>{timestamp}</span>
-            <span className="flex">
-                <button className="accept btn btn-primary">Accept</button>
-                <button className='decline btn btn-danger'>Decline</button>
-            </span>
         </div>
     )
 }

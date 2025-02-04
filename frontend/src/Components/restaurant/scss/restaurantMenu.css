@@ -1,0 +1,8 @@
+.restaurantMenu .add-item {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 20px;
+}
+.restaurantMenu .add-item p {
+  margin: 0px;
+}/*# sourceMappingURL=restaurantMenu.css.map */

@@ -22,6 +22,13 @@ code {
     align-items: center;
     gap: 10px;
 }
+.flex-vertical {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 10px;
+}
 .container {
     max-width: 1440px;
     margin: auto;
