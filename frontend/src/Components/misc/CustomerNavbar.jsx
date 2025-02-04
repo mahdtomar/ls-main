@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import './scss/navbar.css'
 function CustomerNavbar() {
@@ -17,7 +17,14 @@ function CustomerNavbar() {
         );
         setMatchingRestaurants(filtered);
     };
-
+    const getCustomerNotification = async () => {
+        const res = await fetch(`http://localhost:5000/notifications/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
+        const data = await res.json()
+        console.log(data)
+    }
+    useEffect(() => {
+        getCustomerNotification();
+    }, [])
     return (
         <nav >
             <div className="container flex">
@@ -29,6 +36,8 @@ function CustomerNavbar() {
                     </ul>
                 </div>
                 <div className="flex">
+                    <div className="cart"><img src="" alt="" /></div>
+                    <div className="notifications"><img src="" alt="" /></div>
                     <div className="balance">
                         {/* not working yet */}
                         $0

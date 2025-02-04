@@ -20,6 +20,14 @@ const CustomerDashboard = () => {
   //     "timestamp": order[4],
   //     "items": [{"name": i[0], "price": i[1], "quantity": i[2]} for i in items],
   // }
+  const userData = {
+    'first_name': "omar",
+    'last_name': "mahdy",
+    'street_name': "street1",
+    'house_number': "132",
+    'city': "tanta",
+    'zip_code': "123456"
+  }
   const getCustomerOrders = async () => {
     const res = await fetch("http://127.0.0.1:5000/orders/history/1", {
       method: "GET",
@@ -34,24 +42,27 @@ const CustomerDashboard = () => {
     const data = await res.json()
     console.log(data)
   }
-  const getCustomerNotification = async () => {
-    const res = await fetch(`http://localhost:5000/notifications/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
-    const data = await res.json()
-    console.log(data)
+
+  const getUserProfile = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/customer/3/profile", { credentials: "include", method: "GET" })
+      const data = await res.json()
+      console.log("user profile", data)
+    } catch (error) { console.log(error) }
   }
-  const checkSession = async() => {
+  const checkSession = async () => {
     try {
       const res = await fetch(`http://localhost:5000/session`, {
         method: "GET",
         credentials: "include",
       })
       const data = await res.json()
-      console.log("check session",data)
+      console.log("check session", data)
     } catch (err) {
       console.log(err)
     }
   }
-  useEffect(() => { getCustomerOrders(); getWalletBalance(); getCustomerNotification();checkSession(); }, [])
+  useEffect(() => { getCustomerOrders(); getWalletBalance(); checkSession(); getUserProfile() }, [])
   return (
     <div className="container my-4">
       <div className="card">
@@ -69,14 +80,20 @@ const CustomerDashboard = () => {
 
           {/* My Data Section */}
           <div className="mb-4">
-            <h5 className="text-success">✔ My Data</h5>
-            <p>Personal details (Name, Address, ZIP Code)</p>
-            {/* not available */}
+            <h5 className="text-success"> My Data</h5>
+            <ul>
+              <li>First Name : {userData.first_name}</li>
+              <li>Last Name : {userData.last_name}</li>
+              <li>Street: {userData.street_name}</li>
+              <li>City : {userData.city}</li>
+              <li>House Number : {userData.house_number}</li>
+              <li>Zip Code : {userData.zip_code}</li>
+            </ul>
           </div>
 
           {/* Customer Balance Section */}
           <div className="mb-4">
-            <h5 className="text-success">✔ Customer Balance</h5>
+            <h5 className="text-success"> Customer Balance</h5>
             {/* data.wallet_balance */}
             {/* not available */}
           </div>
