@@ -12,11 +12,13 @@ import SignupRestaurant from "./Components/SignupRestaurant";
 import CustomerDashboard from "./Components/customer/CustomerDashboard";
 import CustomerRoutes from "./routes/CustomerRoutes";
 import RestaurantDashboard from "./Components/restaurant/RestaurantDashboard";
+import CustomerNavbar from "./Components/misc/CustomerNavbar";
 
 function App() {
     return (
         <>
-            <Navbar />
+            {/* <Navbar /> */}
+            <CustomerNavbar />
             <Routes>
                 <Route path="" element={<Home />} />
                 <Route path="login" element={<Login />} />

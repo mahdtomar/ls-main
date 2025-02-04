@@ -22,9 +22,13 @@ export default function SignupRestaurant() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post("/restaurant", formData);
+      await axios.post("http://localhost:3000/restaurant", formData, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       alert("Restaurant registered successfully! Please log in.");
-      navigate("/restaurant/login"); // Navigate to login page
+      navigate("/restaurant/login");
     } catch (error) {
       alert("Error: " + (error.response?.data?.error || error.message));
     }

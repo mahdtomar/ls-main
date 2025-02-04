@@ -27,12 +27,14 @@ export default function LoginCustomer() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(formData),
+        credentials: "include"
       });
       const result = await response.json();
+      console.log(result)
       if (result.success) {
         alert("Login successful!");
-        localStorage.setItem("Customer_ID", result.customer_id)
-        console.log("Customer ID:", response.customer_id);
+        localStorage.setItem("Customer_ID", JSON.stringify(result.customer_id))
+        console.log("Customer ID:", result.customer_id);
         navigate("/customer-dashboard"); // Navigate to Customer Dashboard
       } else {
         alert(`Login failed: ${result.error || "Invalid credentials"}`);

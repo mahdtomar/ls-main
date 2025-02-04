@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import CustomerOrderLine from "./CustomerOrderLine";
+import CustomerOrderLine from "./OrderLine";
 
 const CustomerDashboard = () => {
   const orders = [
@@ -21,12 +21,25 @@ const CustomerDashboard = () => {
   //     "items": [{"name": i[0], "price": i[1], "quantity": i[2]} for i in items],
   // }
   const getCustomerOrders = async () => {
-    const res = await fetch("http://127.0.0.1:5000/orders/history/1", { method: "GET" })
+    const res = await fetch("http://127.0.0.1:5000/orders/history/1", {
+      method: "GET",
+      credentials: "include"
+    })
     console.log(res)
     const orders = await res.json()
     console.log(orders)
   }
-  useEffect(() => { getCustomerOrders() }, [])
+  const getWalletBalance = async () => {
+    const res = await fetch(`http://localhost:5000/wallet/customer/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
+    const data = await res.json()
+    console.log(data)
+  }
+  const getCustomerNotification = async () => {
+    const res = await fetch(`http://localhost:5000/notifications/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
+    const data = await res.json()
+    console.log(data)
+  }
+  useEffect(() => { getCustomerOrders(); getWalletBalance(); getCustomerNotification(); }, [])
   return (
     <div className="container my-4">
       <div className="card">
@@ -52,7 +65,7 @@ const CustomerDashboard = () => {
           {/* Customer Balance Section */}
           <div className="mb-4">
             <h5 className="text-success">✔ Customer Balance</h5>
-            <p>Shows current wallet balance</p>
+            {/* data.wallet_balance */}
             {/* not available */}
           </div>
 
