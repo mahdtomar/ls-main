@@ -88,6 +88,19 @@ def init_db():
     );
     ''')
 
+#Orders for accepting and declining:
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    restaurant_id INTEGER NOT NULL,
+    status TEXT DEFAULT 'In Bearbeitung',
+    timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers (id),
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants (id)
+    );
+    ''')
+    
     # Create notifications table
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS notifications (
