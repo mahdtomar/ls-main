@@ -68,6 +68,10 @@ function CustomerNavbar() {
             setCart(cartItems)
         } catch (error) { console.log(error) }
     }
+    const chooseRestaurant = (id) => {
+        navigate(`/restaurant/${id}/menu`)
+        setInputValue("")
+    }
     const handleLogout = async () => {
         try {
             const res = await fetch("http://localhost:5000/logout", { method: "POST", credentials: "include" })
@@ -103,16 +107,20 @@ function CustomerNavbar() {
                         </ul>
                     </div>
                     <div className="flex">
-                        <div className="cart"><img src={cartIcon} alt="" onClick={() => { setShowCart(curr => !curr) }} />
-                            {showCart && cart.map(({ item_id, name, price, quantity }) => <div className="flex" key={item_id}>
-                                <span>{name}</span> <span>{price}</span> <span>{quantity}</span>  <span>{price * quantity}</span>
-                            </div>)}
+                        <div className="cart">
+                            <img src={cartIcon} alt="" onClick={() => { setShowCart(curr => !curr) }} />
+                            {showCart && <ul className="flex-vertical" >
+                                {cart.map(({ item_id, name, price, quantity }) => <li key={item_id}>
+                                    <span>{name}</span> <span>{price}</span> <span>{quantity}</span>  <span>{price * quantity}</span>
+                                </li>)}
+                            </ul>}
                         </div>
                         <div className="notifications"><img src={notificationsIcon} alt="" onClick={() => { setShowNotifications(curr => !curr) }} />
-                            {showNotifications && notifications.map(({ message, id, timestamp }) => <div key={id}>
-                                <span>{message}</span>
-                                <span>{timestamp}</span>
-                            </div>)}
+                            {showNotifications && <ul className="flex-vertical">
+                                {notifications.map(({ message, id, timestamp }) => <li key={id}>
+                                    <span>{message}</span>
+                                    <span>{timestamp}</span>
+                                </li>)}</ul>}
                         </div>
                         <div className="balance">
                             {/* not working yet */}
@@ -128,16 +136,16 @@ function CustomerNavbar() {
                                 }}
                                 placeholder="Search restaurants by ZIP code..."
                             />
+                            {matchingRestaurants.length > 0 && inputValue !== "" && (
+                                <ul className="search-results">
+                                    {matchingRestaurants.map((restaurant) => (
+                                        <li key={restaurant.id} onClick={() => { chooseRestaurant(restaurant.id) }}>{restaurant.title}</li>
+                                    ))}
+                                </ul>
+                            )}
                         </div>
                         <button className="btn btn-danger" onClick={handleLogout}>Logout</button>
                     </div>
-                    {matchingRestaurants.length > 0 && inputValue !== "" && (
-                        <ul className="search-results">
-                            {matchingRestaurants.map((restaurant) => (
-                                <li key={restaurant.id}>{restaurant.title}</li>
-                            ))}
-                        </ul>
-                    )}
                 </div>
             </nav>}
         </>

@@ -16,4 +16,70 @@ nav ul a {
 }
 nav ul a:hover {
   background-color: #eee;
+}
+nav .search {
+  position: relative;
+}
+nav ul {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 0px;
+  background-color: white;
+  box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.3);
+}
+nav ul li {
+  cursor: pointer;
+  width: 200px;
+  padding: 5px 2px;
+  transition: background-color 0.3s ease-in-out;
+}
+nav ul li:hover {
+  background-color: #eee;
+}
+nav .cart {
+  position: relative;
+}
+nav .cart ul {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 0px;
+  background-color: white;
+  box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.3);
+}
+nav .cart ul li {
+  cursor: pointer;
+  width: 200px;
+  padding: 5px 2px;
+  transition: background-color 0.3s ease-in-out;
+}
+nav .cart ul li:hover {
+  background-color: #eee;
+}
+nav .notifications {
+  position: relative;
+}
+nav .notifications ul {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 0px;
+  background-color: white;
+  box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.3);
+}
+nav .notifications ul li {
+  cursor: pointer;
+  width: 200px;
+  padding: 5px 2px;
+  transition: background-color 0.3s ease-in-out;
+}
+nav .notifications ul li:hover {
+  background-color: #eee;
 }/*# sourceMappingURL=navbar.css.map */
