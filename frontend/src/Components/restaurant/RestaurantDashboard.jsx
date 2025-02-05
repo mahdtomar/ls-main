@@ -11,13 +11,13 @@ const RestaurantDashboard = () => {
     const [showMenuForm, setShowMenuForm] = useState(false)
     const navigate = useNavigate()
     const getRestaurantMenu = async () => {
-        const res = await fetch("http://localhost:5001/restaurant/1/menu", { method: "GET" })
+        const res = await fetch("http://localhost:5000/restaurant/1/menu", { method: "GET" })
         const data = await res.json()
         console.log(data)
         setMenu(data)
     }
     const getRestaurantOrders = async () => {
-        const res = await fetch("http://localhost:5001/restaurant/orders", { method: "GET" })
+        const res = await fetch("http://localhost:5000/restaurant/orders", { method: "GET" })
         const orders = await res.json()
         console.log("orders:", orders)
     }
@@ -33,7 +33,7 @@ const RestaurantDashboard = () => {
         }]
     const handleLogout = async () => {
         try {
-            const res = await fetch("http://localhost:5001/logout", { method: "POST", credentials: "include" })
+            const res = await fetch("http://localhost:5000/logout", { method: "POST", credentials: "include" })
             const data = await res.json()
             if (res.ok) {
                 navigate("/")

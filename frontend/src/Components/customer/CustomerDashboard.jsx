@@ -30,20 +30,39 @@ const CustomerDashboard = () => {
     'city': "tanta",
     'zip_code': "123456"
   }
+  const customerId = localStorage.getItem("Customer_ID"); // Retrieve customer ID from localStorage or state
   const getCustomerOrders = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:5000/orders/history/1", {
+      if (!customerId) {
+        console.error("Customer ID is missing");
+        return;
+      }
+
+      const response = await fetch(`http://127.0.0.1:5000/orders/history?customer_ID=${customerId}`, {
         method: "GET",
-        credentials: "include"
-      })
-      console.log(res)
-      const orders = await res.json()
-      console.log(orders)
-    } catch (error) { console.log(error) }
-  }
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch orders: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Fetched Orders:", data.orders);
+
+      return data.orders; // Return orders for further processing
+
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      return null;
+    }
+  };
+
   const getWalletBalance = async () => {
     try {
-      const res = await fetch(`http://localhost:5001/wallet/customer/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
+      const res = await fetch(`http://localhost:5000/wallet/customer/${localStorage.getItem("Customer_ID")}`, { method: "GET" })
       const data = await res.json()
       console.log(data)
     } catch (error) { console.log(error) }
@@ -51,16 +70,16 @@ const CustomerDashboard = () => {
 
   const getUserProfile = async () => {
     try {
-      const res = await fetch("http://localhost:5001/customer/3/profile", { credentials: "include", method: "GET" })
+      const res = await fetch(`http://localhost:5000/customer/profile?customer_id=${customerId}`, { credentials: "include", method: "GET" })
       const data = await res.json()
       console.log("user profile", data)
-    } catch (error) { console.log(error) }
+    } catch (error) { console.log("error with user profile ", error) }
   }
   const checkSession = async () => {
     try {
-      const res = await fetch(`http://localhost:5001/session`, {
+      const res = await fetch(`http://localhost:5000/session`, {
         method: "GET",
-        credentials: "include",
+
       })
       const data = await res.json()
       console.log("check session", data)
@@ -70,7 +89,7 @@ const CustomerDashboard = () => {
   }
   const handleLogout = async () => {
     try {
-      const res = await fetch("http://localhost:5001/logout", { method: "POST", credentials: "include" })
+      const res = await fetch("http://localhost:5000/logout", { method: "POST" })
       const data = await res.json()
       if (res.ok) {
         navigate("/")

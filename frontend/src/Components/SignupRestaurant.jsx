@@ -22,7 +22,7 @@ export default function SignupRestaurant() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post("http://localhost:3000/restaurant", formData, {
+      await axios.post("http://localhost:5000/restaurant", formData, {
         headers: {
           'Content-Type': 'application/json'
         }

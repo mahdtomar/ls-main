@@ -10,7 +10,7 @@ const RestaurantMenu = () => {
     const { id } = useParams()
     console.log(id)
     const getRestaurantMenu = async () => {
-        const res = await fetch("http://localhost:5001/restaurant/1/menu", { method: "GET" })
+        const res = await fetch("http://localhost:5000/restaurant/1/menu", { method: "GET" })
         const data = await res.json()
         console.log(data)
         setMenu(data)

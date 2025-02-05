@@ -23,7 +23,7 @@ const RestaurantNavbar = () => {
         ])
     const getCustomerNotification = async () => {
         try {
-            const res = await fetch(`http://localhost:5001/notifications/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
+            const res = await fetch(`http://localhost:5000/notifications/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
             const data = await res.json()
             console.log("customer notifications : ", data)
             setNotifications(data)
@@ -34,7 +34,7 @@ const RestaurantNavbar = () => {
 
     const getCartItems = async () => {
         try {
-            const res = await fetch(`http://localhost:5001/cart/${localStorage.getItem("Customer_ID")}`)
+            const res = await fetch(`http://localhost:5000/cart/${localStorage.getItem("Customer_ID")}`)
             const cartItems = res.json()
             console.log("cart Items:", cartItems)
             setCart(cartItems)

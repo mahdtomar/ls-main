@@ -36,7 +36,7 @@ function CustomerNavbar() {
     const getAvailableRestaurants = async () => {
         // setRestaurants()
         try {
-            const res = await fetch(`http://localhost:5001/restaurants/zip_code?zip_code=${user.zip_code}`, {
+            const res = await fetch(`http://localhost:5000/restaurants/zip_code?zip_code=${user.zip_code}`, {
                 method: "GET",
                 credentials: "include",
             });
@@ -47,7 +47,7 @@ function CustomerNavbar() {
 
     const getCustomerNotification = async () => {
         try {
-            const res = await fetch(`http://localhost:5001/notifications/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
+            const res = await fetch(`http://localhost:5000/notifications/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
             const data = await res.json()
             console.log("customer notifications : ", data)
             setNotifications(data)
@@ -63,7 +63,7 @@ function CustomerNavbar() {
     }
     const handleLogout = async () => {
         try {
-            const res = await fetch("http://localhost:5001/logout", { method: "POST", credentials: "include" })
+            const res = await fetch("http://localhost:5000/logout", { method: "POST", credentials: "include" })
             const data = await res.json()
             if (res.ok) {
                 navigate("/")

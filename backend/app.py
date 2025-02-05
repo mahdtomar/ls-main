@@ -1,10 +1,7 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from flask_session import Session  # Added for session management
-from datetime import timedelta  # Add this import at the top
 import sqlite3
 import os
-from functools import wraps
 
 # Database Path
 DB_PATH = os.path.abspath("lieferspatz.db")
@@ -25,41 +22,7 @@ def get_db_connection():
 
 
 app = Flask(__name__)
-CORS(
-    app,
-    resources={
-        r"/*": {
-            "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type"],
-            "supports_credentials": True,
-        }
-    },
-    expose_headers=["Content-Range", "X-Content-Range"],
-)
-
-# 🔹 Session Configuration
-app.config["SECRET_KEY"] = (
-    "your_secure_random_secret_key"  # Keep your existing secret key
-)
-app.config["SESSION_TYPE"] = "filesystem"  # ✅ Ensures sessions are stored persistently
-app.config["SESSION_PERMANENT"] = True  # ✅ Sessions persist across browser refresh
-app.config["SESSION_USE_SIGNER"] = True  # ✅ Adds extra security to session cookies
-app.config["SESSION_FILE_DIR"] = (
-    "./flask_session"  # ✅ Explicit directory for session files
-)
-app.config["SESSION_FILE_THRESHOLD"] = (
-    100  # ✅ Limits session file count to avoid overflow
-)
-
-app.config.update(
-    SESSION_COOKIE_SECURE=False,  # ✅ Set to False for local dev (Change to True in production)
-    SESSION_COOKIE_HTTPONLY=True,  # ✅ Prevents client-side JS from accessing cookies
-    SESSION_COOKIE_SAMESITE="Lax",  # ✅ Prevents CSRF while allowing same-site requests
-    PERMANENT_SESSION_LIFETIME=timedelta(days=7),  # ✅ Sessions last 7 days
-)
-
-Session(app)  # ✅ Initializes Flask-Session
+CORS(app, resources={r"/*": {"origins": ["http://localhost:3000"]}})
 
 
 @app.route("/")
@@ -67,43 +30,17 @@ def home():
     return "Welcome to Lieferspatz Backend API!"
 
 
-@app.route("/session")
-def check_session():
-    return jsonify({"user_id": session.get("user_id"), "role": session.get("role")})
-
-
-# ✅ Add a Session Check Function (Reusable)
-def login_required(role=None):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            # Check if user is logged in
-            user_id = session.get("user_id")
-            if not user_id:
-                return jsonify({"error": "Unauthorized. Please log in."}), 401
-
-            # If role is specified, check if user has correct role
-            if role:
-                user_role = session.get("role")
-                if user_role != role:
-                    return (
-                        jsonify({"error": f"Access denied. Required role: {role}"}),
-                        403,
-                    )
-
-            return f(*args, **kwargs)
-
-        return decorated_function
-
-    return decorator
-
-
-# Logout Route Code
-@app.route("/logout", methods=["POST"])
-def logout():
-    """Logs out the user by clearing the session."""
-    session.clear()  # Removes user_id and role from session
-    return jsonify({"success": True, "message": "Logged out successfully"}), 200
+def get_db_connection():
+    """Returns a connection to the SQLite database"""
+    try:
+        if not os.path.exists(DB_PATH):
+            raise FileNotFoundError(f"Database file not found at {DB_PATH}")
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn.execute("PRAGMA foreign_keys = ON")  # Ensures foreign key cons   traints
+        return conn
+    except Exception as e:
+        print(f"❌ Database connection error: {e}")
+        return None
 
 
 # ✅ Create a new customer
@@ -133,7 +70,7 @@ def create_customer():
 
         cursor = conn.cursor()
 
-        # Insert customer data
+        # Insert customer data (No need to check if customer exists)
         cursor.execute(
             """
             INSERT INTO customers (first_name, last_name, street_name, house_number, city, zip_code, password, wallet_balance)
@@ -153,13 +90,11 @@ def create_customer():
 
         conn.commit()
         customer_id = cursor.lastrowid
-        conn.close()  # Ensure the connection is closed properly
+        conn.close()
 
         return jsonify({"success": True, "customer_id": customer_id}), 201
 
     except Exception as e:
-        if conn:
-            conn.close()  # Ensure connection is closed in case of an error
         print(f"❌ Error creating customer: {e}")  # Log the error for debugging
         return jsonify({"error": str(e)}), 500
 
@@ -190,7 +125,7 @@ def create_restaurant():
 
         cursor = conn.cursor()
 
-        # Insert restaurant data
+        # Insert restaurant data (No need to check if restaurant exists)
         cursor.execute(
             """
             INSERT INTO restaurants (name, street_name, house_number, city, zip_code, description, password, wallet_balance)
@@ -210,19 +145,15 @@ def create_restaurant():
 
         conn.commit()
         restaurant_id = cursor.lastrowid
-        conn.close()  # Ensure the connection is closed properly
+        conn.close()
 
         return jsonify({"success": True, "restaurant_id": restaurant_id}), 201
 
     except Exception as e:
-        if conn:
-            conn.close()  # Ensure connection is closed in case of an error
         print(f"❌ Error creating restaurant: {e}")  # Log the error for debugging
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Restaurant login with session
-# ✅ Restaurant login with session
 @app.route("/restaurant/login", methods=["POST"])
 def login_restaurant():
     try:
@@ -242,16 +173,6 @@ def login_restaurant():
         conn.close()
 
         if restaurant:
-            # ✅ Ensure session persists across browser refresh
-            session.permanent = True
-            session["user_id"] = restaurant[0]
-            session["role"] = "restaurant"
-
-            # 🔹 Force Flask to save session changes
-            session.modified = True
-
-            print("✅ Session set:", dict(session))  # Debugging output
-
             return jsonify({"success": True, "restaurant_id": restaurant[0]}), 200
         else:
             return jsonify({"success": False, "error": "Invalid credentials"}), 401
@@ -260,7 +181,6 @@ def login_restaurant():
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Customer login with session
 @app.route("/customer/login", methods=["POST"])
 def login_customer():
     try:
@@ -281,16 +201,6 @@ def login_customer():
         conn.close()
 
         if customer:
-            # ✅ Ensure session persists across browser refresh
-            session.permanent = True
-            session["user_id"] = customer[0]
-            session["role"] = "customer"
-
-            # 🔹 Force Flask to save session changes
-            session.modified = True
-
-            print("✅ Session set:", dict(session))  # Debugging output
-
             return jsonify({"success": True, "customer_id": customer[0]}), 200
         else:
             return jsonify({"success": False, "error": "Invalid credentials"}), 401
@@ -299,17 +209,23 @@ def login_customer():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/customer/<int:customer_id>/profile", methods=["GET"])
-@login_required("customer")  # Only customers can view their own profile
-def get_customer_profile(customer_id):
-    """Retrieve personal details of the logged-in customer"""
-    if session["user_id"] != customer_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+@app.route("/customer/profile", methods=["GET"])
+def get_customer_profile():
+    """Retrieve personal details of a customer by ID"""
+    print("customer ID")
+    print(request.args)
     try:
+        customer_id = request.args.get(
+            "customer_id"
+        )  # Get customer_id from query parameters
+        print(customer_id)
+        if not customer_id:
+            return jsonify({"error": "Missing customer ID"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # ✅ Fetch customer details
         cursor.execute(
             """
             SELECT first_name, last_name, street_name, house_number, 
@@ -344,26 +260,38 @@ def get_customer_profile(customer_id):
         return jsonify({"error": str(e)}), 500
 
 
-# Filter restaurants based on delivery ZIP code
+# ✅ Fetch all restaurants, optionally filter by ZIP code
 @app.route("/restaurants", methods=["GET"])
 def get_restaurants():
     try:
         zip_code = request.args.get("zip_code")
-        if not zip_code:
-            return jsonify({"error": "ZIP code is required"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute(
-            "SELECT id, name, street_name, house_number, city, zip_code, description FROM restaurants WHERE zip_code = ?",
-            (zip_code,),
-        )
+        if zip_code:
+            # ✅ Filter restaurants by ZIP code if provided
+            cursor.execute(
+                """
+                SELECT id, name, street_name, house_number, city, zip_code, description 
+                FROM restaurants WHERE zip_code = ?
+            """,
+                (zip_code,),
+            )
+        else:
+            # ✅ Fetch all restaurants if no ZIP code is provided
+            cursor.execute(
+                """
+                SELECT id, name, street_name, house_number, city, zip_code, description 
+                FROM restaurants
+            """
+            )
+
         restaurants = cursor.fetchall()
         conn.close()
 
         if not restaurants:
-            return jsonify({"message": "No restaurants deliver to this ZIP code"}), 200
+            return jsonify({"message": "No restaurants found"}), 200
 
         return (
             jsonify(
@@ -395,7 +323,10 @@ def get_restaurant_menu(restaurant_id):
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT id, name, description, price FROM menu_items WHERE restaurant_id = ?",
+            """
+            SELECT id, name, description, price, photo_url
+            FROM menu_items WHERE restaurant_id = ?
+        """,
             (restaurant_id,),
         )
         menu_items = cursor.fetchall()
@@ -412,6 +343,7 @@ def get_restaurant_menu(restaurant_id):
                         "name": item[1],
                         "description": item[2],
                         "price": item[3],
+                        "photo_url": item[4],
                     }
                     for item in menu_items
                 ]
@@ -423,40 +355,49 @@ def get_restaurant_menu(restaurant_id):
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Create an order
+# ✅ Create an order without authentication
 @app.route("/order", methods=["POST"])
-@login_required("customer")  # Only customers can place orders
 def create_order():
-    """Allow only the logged-in customer to place an order"""
+    """Allow any customer to place an order without authentication"""
     try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "Invalid or missing JSON payload"}), 400
 
-        customer_id = session[
-            "user_id"
-        ]  # 🔹 Use session to ensure only the logged-in customer is making the order
+        customer_id = data.get("customer_id")
         restaurant_id = data.get("restaurant_id")
         items = data.get("items")
+
+        if not customer_id or not restaurant_id or not items:
+            return (
+                jsonify(
+                    {
+                        "error": "Missing required fields: customer_id, restaurant_id, and items"
+                    }
+                ),
+                400,
+            )
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Validate customer existence and balance
+        # ✅ Validate customer existence and balance
         cursor.execute(
             "SELECT wallet_balance FROM customers WHERE id = ?", (customer_id,)
         )
         customer = cursor.fetchone()
         if not customer:
+            conn.close()
             return jsonify({"error": "Customer not found"}), 404
 
         total_price = sum(item["price"] * item["quantity"] for item in items)
 
         if customer[0] < total_price:
+            conn.close()
             return jsonify({"error": "Insufficient balance to complete the order"}), 400
 
         try:
-            # Insert order into `orders` table
+            # ✅ Insert order into `orders` table
             cursor.execute(
                 """
                 INSERT INTO orders (customer_id, restaurant_id, status, timestamp)
@@ -467,7 +408,7 @@ def create_order():
 
             order_id = cursor.lastrowid
 
-            # Insert each item into `order_items`
+            # ✅ Insert each item into `order_items`
             for item in items:
                 cursor.execute(
                     """
@@ -477,36 +418,36 @@ def create_order():
                     (order_id, item["name"], item["price"], item["quantity"]),
                 )
 
-            # Deduct payment from customer's wallet
+            # ✅ Deduct payment from customer's wallet
             cursor.execute(
                 "UPDATE customers SET wallet_balance = wallet_balance - ? WHERE id = ?",
                 (total_price, customer_id),
             )
 
-            # Payment Distribution (85% to restaurant, 15% to Lieferspatz)
+            # ✅ Payment Distribution (85% to restaurant, 15% to Lieferspatz)
             lieferspatz_fee = total_price * 0.15
             restaurant_earnings = total_price * 0.85
 
-            # Update restaurant balance
+            # ✅ Update restaurant balance
             cursor.execute(
                 "UPDATE restaurants SET wallet_balance = wallet_balance + ? WHERE id = ?",
                 (restaurant_earnings, restaurant_id),
             )
 
-            # Store Lieferspatz’s earnings
+            # ✅ Store Lieferspatz’s earnings
             cursor.execute(
                 "INSERT INTO lieferspatz_balance (amount) VALUES (?)",
                 (lieferspatz_fee,),
             )
 
-            # Insert notification for restaurant
+            # ✅ Insert notification for restaurant
             notification_message = f"New order received! Order ID: {order_id}"
             cursor.execute(
                 "INSERT INTO notifications (restaurant_id, message) VALUES (?, ?)",
                 (restaurant_id, notification_message),
             )
 
-            # Commit the entire transaction
+            # ✅ Commit the entire transaction
             conn.commit()
             conn.close()
 
@@ -532,46 +473,65 @@ def create_order():
         return jsonify({"error": str(e)}), 500
 
 
-# Allow customers to review and modify thier cart before ordering
+# Allow customers to review and modify their cart before ordering
 cart = {}  # Store temporary cart data
 
 
 @app.route("/cart", methods=["POST"])
-@login_required("customer")  # Only customers can add to cart
 def add_to_cart():
-    """Allow only the logged-in customer to add items to their cart"""
+    """Allow any customer to add items to their cart"""
     try:
         data = request.get_json()
-        customer_id = session["user_id"]  # 🔹 Use session to ensure ownership
+        if not data:
+            return jsonify({"error": "Invalid or missing JSON payload"}), 400
 
-        if data["customer_id"] != customer_id:
-            return jsonify({"error": "Unauthorized access"}), 403
+        customer_id = data.get("customer_id")
+        item_id = data.get("item_id")
+        quantity = data.get("quantity")
+
+        if not customer_id or not item_id or not quantity:
+            return (
+                jsonify(
+                    {
+                        "error": "Missing required fields: customer_id, item_id, and quantity"
+                    }
+                ),
+                400,
+            )
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # ✅ Ensure item exists before adding to cart
+        cursor.execute("SELECT id FROM menu_items WHERE id = ?", (item_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({"error": "Item not found"}), 404
+
+        # ✅ Insert into cart
         cursor.execute(
             "INSERT INTO cart (customer_id, item_id, quantity) VALUES (?, ?, ?)",
-            (customer_id, data["item_id"], data["quantity"]),
+            (customer_id, item_id, quantity),
         )
 
         conn.commit()
         conn.close()
 
-        return jsonify({"success": True}), 201
+        return jsonify({"success": True, "message": "Item added to cart"}), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/cart/<int:customer_id>", methods=["GET"])
-@login_required("customer")  # Only customers can view their cart
-def view_cart(customer_id):
-    """Allow only the logged-in customer to view their cart"""
-    if session["user_id"] != customer_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+# ✅ View customer cart without authentication
+@app.route("/cart", methods=["GET"])
+def view_cart():
+    """Allow any customer to view their cart"""
     try:
+        customer_id = request.args.get("customer_id")
+        if not customer_id:
+            return jsonify({"error": "Missing customer ID"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -588,37 +548,47 @@ def view_cart(customer_id):
         cart_items = cursor.fetchall()
         conn.close()
 
-        return jsonify(
-            [
-                {
-                    "item_id": item[0],
-                    "name": item[1],
-                    "price": item[2],
-                    "quantity": item[3],
-                }
-                for item in cart_items
-            ]
+        return (
+            jsonify(
+                [
+                    {
+                        "item_id": item[0],
+                        "name": item[1],
+                        "price": item[2],
+                        "quantity": item[3],
+                    }
+                    for item in cart_items
+                ]
+            ),
+            200,
         )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-# Remove item from cart
-@app.route("/cart/<int:customer_id>", methods=["DELETE"])
-@login_required("customer")  # Only customers can remove items from their cart
-def remove_from_cart(customer_id):
-    """Allow only the logged-in customer to remove items from their cart"""
-    if session["user_id"] != customer_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+# ✅ Remove item from cart without authentication
+@app.route("/cart", methods=["DELETE"])
+def remove_from_cart():
+    """Allow any customer to remove items from their cart"""
     try:
+        customer_id = request.args.get("customer_id")
         item_id = request.args.get("item_id")
-        if not item_id:
-            return jsonify({"error": "Item ID is required"}), 400
+
+        if not customer_id or not item_id:
+            return jsonify({"error": "Missing customer_id or item_id"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        # ✅ Ensure the item exists in the customer's cart before attempting deletion
+        cursor.execute(
+            "SELECT id FROM cart WHERE customer_id = ? AND item_id = ?",
+            (customer_id, item_id),
+        )
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({"error": "Item not found in cart"}), 404
 
         cursor.execute(
             "DELETE FROM cart WHERE customer_id = ? AND item_id = ?",
@@ -628,132 +598,145 @@ def remove_from_cart(customer_id):
         conn.close()
 
         return jsonify({"success": True, "message": "Item removed from cart"}), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-# View Customer Orders (Now Includes Ordered Items)
+# ✅ View customer orders without authentication
 @app.route("/customer/orders", methods=["GET"])
-@login_required("customer")
 def customer_orders():
-    customer_id = session["user_id"]  # Get customer ID from session
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # 🔹 Fetch all orders for the logged-in customer
-    cursor.execute(
-        """
-        SELECT orders.id, orders.restaurant_id, orders.status, orders.timestamp, restaurants.name 
-        FROM orders
-        JOIN restaurants ON orders.restaurant_id = restaurants.id
-        WHERE orders.customer_id = ?
-    """,
-        (customer_id,),
-    )
-    orders = cursor.fetchall()
-
-    # 🔹 Fetch ordered items for each order
-    order_list = []
-    for order in orders:
-        order_id, restaurant_id, status, timestamp, restaurant_name = order
-
-        cursor.execute(
-            """
-            SELECT item_name, quantity, item_price
-            FROM order_items
-            WHERE order_id = ?
-        """,
-            (order_id,),
-        )
-        items = cursor.fetchall()
-
-        order_list.append(
-            {
-                "order_id": order_id,
-                "restaurant_name": restaurant_name,
-                "status": status,
-                "timestamp": timestamp,
-                "items": [
-                    {"name": item[0], "quantity": item[1], "price": item[2]}
-                    for item in items
-                ],
-            }
-        )
-
-    conn.close()
-    return jsonify({"orders": order_list}), 200
-
-
-# View Restaurant Orders (Now Includes Ordered Items & Customer Info)
-@app.route("/restaurant/orders", methods=["GET"])
-@login_required("restaurant")
-def restaurant_orders():
-    restaurant_id = session["user_id"]  # Get restaurant ID from session
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # 🔹 Fetch all orders for this restaurant
-    cursor.execute(
-        """
-        SELECT orders.id, orders.customer_id, orders.status, orders.timestamp, 
-               customers.first_name, customers.last_name
-        FROM orders
-        JOIN customers ON orders.customer_id = customers.id
-        WHERE orders.restaurant_id = ?
-    """,
-        (restaurant_id,),
-    )
-    orders = cursor.fetchall()
-
-    # 🔹 Fetch ordered items for each order
-    order_list = []
-    for order in orders:
-        order_id, customer_id, status, timestamp, first_name, last_name = order
-
-        cursor.execute(
-            """
-            SELECT item_name, quantity, item_price
-            FROM order_items
-            WHERE order_id = ?
-        """,
-            (order_id,),
-        )
-        items = cursor.fetchall()
-
-        order_list.append(
-            {
-                "order_id": order_id,
-                "customer_name": f"{first_name} {last_name}",
-                "status": status,
-                "timestamp": timestamp,
-                "items": [
-                    {"name": item[0], "quantity": item[1], "price": item[2]}
-                    for item in items
-                ],
-            }
-        )
-
-    conn.close()
-    return jsonify({"orders": order_list}), 200
-
-
-# ✅ Modify menu item price
-@app.route("/restaurant/<int:restaurant_id>/menu/<int:item_id>", methods=["PUT"])
-@login_required("restaurant")
-def update_menu_item(restaurant_id, item_id):
-    if session["user_id"] != restaurant_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+    """Retrieve all orders for a given customer"""
     try:
-        data = request.get_json()
-        if "price" not in data:
-            return jsonify({"error": "Missing price field"}), 400
+        customer_id = request.args.get("customer_id")
+        if not customer_id:
+            return jsonify({"error": "Missing customer ID"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # ✅ Fetch all orders for the specified customer
+        cursor.execute(
+            """
+            SELECT orders.id, orders.restaurant_id, orders.status, orders.timestamp, restaurants.name 
+            FROM orders
+            JOIN restaurants ON orders.restaurant_id = restaurants.id
+            WHERE orders.customer_id = ?
+        """,
+            (customer_id,),
+        )
+        orders = cursor.fetchall()
+
+        # ✅ Fetch ordered items for each order
+        order_list = []
+        for order in orders:
+            order_id, restaurant_id, status, timestamp, restaurant_name = order
+
+            cursor.execute(
+                """
+                SELECT item_name, quantity, item_price
+                FROM order_items
+                WHERE order_id = ?
+            """,
+                (order_id,),
+            )
+            items = cursor.fetchall()
+
+            order_list.append(
+                {
+                    "order_id": order_id,
+                    "restaurant_name": restaurant_name,
+                    "status": status,
+                    "timestamp": timestamp,
+                    "items": [
+                        {"name": item[0], "quantity": item[1], "price": item[2]}
+                        for item in items
+                    ],
+                }
+            )
+
+        conn.close()
+        return jsonify({"orders": order_list}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ✅ View restaurant orders without authentication
+@app.route("/restaurant/orders", methods=["GET"])
+def restaurant_orders():
+    """Retrieve all orders for a given restaurant"""
+    try:
+        restaurant_id = request.args.get("restaurant_id")
+        if not restaurant_id:
+            return jsonify({"error": "Missing restaurant ID"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # ✅ Fetch all orders for the specified restaurant
+        cursor.execute(
+            """
+            SELECT orders.id, orders.customer_id, orders.status, orders.timestamp, 
+                   customers.first_name, customers.last_name
+            FROM orders
+            JOIN customers ON orders.customer_id = customers.id
+            WHERE orders.restaurant_id = ?
+        """,
+            (restaurant_id,),
+        )
+        orders = cursor.fetchall()
+
+        # ✅ Fetch ordered items for each order
+        order_list = []
+        for order in orders:
+            order_id, customer_id, status, timestamp, first_name, last_name = order
+
+            cursor.execute(
+                """
+                SELECT item_name, quantity, item_price
+                FROM order_items
+                WHERE order_id = ?
+            """,
+                (order_id,),
+            )
+            items = cursor.fetchall()
+
+            order_list.append(
+                {
+                    "order_id": order_id,
+                    "customer_name": f"{first_name} {last_name}",
+                    "status": status,
+                    "timestamp": timestamp,
+                    "items": [
+                        {"name": item[0], "quantity": item[1], "price": item[2]}
+                        for item in items
+                    ],
+                }
+            )
+
+        conn.close()
+        return jsonify({"orders": order_list}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ✅ Modify menu item price without authentication
+@app.route("/restaurant/menu/<int:item_id>", methods=["PUT"])
+def update_menu_item(item_id):
+    """Allow any restaurant to update a menu item price by providing restaurant_id"""
+    try:
+        data = request.get_json()
+        restaurant_id = data.get("restaurant_id")
+
+        if not restaurant_id or "price" not in data:
+            return jsonify({"error": "Missing restaurant_id or price field"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # ✅ Update menu item price
         cursor.execute(
             """
             UPDATE menu_items 
@@ -764,32 +747,35 @@ def update_menu_item(restaurant_id, item_id):
         )
 
         if cursor.rowcount == 0:
-            return jsonify({"error": "Menu item not found"}), 404
+            conn.close()
+            return jsonify({"error": "Menu item not found or unauthorized"}), 404
 
         conn.commit()
         conn.close()
-
         return jsonify({"success": True, "message": "Menu item price updated"}), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-# Add Menu Management (Add/Edit/Delete items)
 # ✅ Add a new menu item
-@app.route("/restaurant/<int:restaurant_id>/menu", methods=["POST"])
-@login_required("restaurant")
-def add_menu_item(restaurant_id):
-    if session["user_id"] != restaurant_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+# ✅ Add a new menu item without authentication
+@app.route("/restaurant/menu", methods=["POST"])
+def add_menu_item():
+    """Allow any restaurant to add menu items by providing restaurant_id"""
     try:
         data = request.get_json()
-        if not all(k in data for k in ("name", "description", "price")):
-            return jsonify({"error": "Missing required fields"}), 400
+        restaurant_id = data.get("restaurant_id")
+
+        if not restaurant_id or not all(
+            k in data for k in ("name", "description", "price")
+        ):
+            return jsonify({"error": "Missing restaurant_id or required fields"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # ✅ Insert new menu item
         cursor.execute(
             """
             INSERT INTO menu_items (restaurant_id, name, description, price)
@@ -806,24 +792,29 @@ def add_menu_item(restaurant_id):
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Delete a menu item
-@app.route("/restaurant/<int:restaurant_id>/menu/<int:item_id>", methods=["DELETE"])
-@login_required("restaurant")
-def delete_menu_item(restaurant_id, item_id):
-    if session["user_id"] != restaurant_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+# ✅ Delete menu item without authentication
+@app.route("/restaurant/menu/<int:item_id>", methods=["DELETE"])
+def delete_menu_item(item_id):
+    """Allow any restaurant to delete menu items by providing restaurant_id"""
     try:
+        data = request.get_json()
+        restaurant_id = data.get("restaurant_id")
+
+        if not restaurant_id:
+            return jsonify({"error": "Missing restaurant_id"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # ✅ Delete the menu item
         cursor.execute(
             "DELETE FROM menu_items WHERE id = ? AND restaurant_id = ?",
             (item_id, restaurant_id),
         )
 
         if cursor.rowcount == 0:
-            return jsonify({"error": "Menu item not found"}), 404
+            conn.close()
+            return jsonify({"error": "Menu item not found or unauthorized"}), 404
 
         conn.commit()
         conn.close()
@@ -833,10 +824,10 @@ def delete_menu_item(restaurant_id, item_id):
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Get order details
+# ✅ Get order details without authentication
 @app.route("/order/<int:order_id>", methods=["GET"])
-@login_required()  # Requires login but allows both customers & restaurants
 def get_order_details(order_id):
+    """Retrieve order details without authentication"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -848,20 +839,10 @@ def get_order_details(order_id):
         order = cursor.fetchone()
 
         if not order:
+            conn.close()
             return jsonify({"error": "Order not found"}), 404
 
-        # 🔹 Authorization check: Allow only the order's customer or restaurant
-        user_id = session["user_id"]
-        user_role = session["role"]
-
-        if user_role == "customer" and user_id != order[1]:  # Check customer ownership
-            return jsonify({"error": "Unauthorized access"}), 403
-        if (
-            user_role == "restaurant" and user_id != order[2]
-        ):  # Check restaurant ownership
-            return jsonify({"error": "Unauthorized access"}), 403
-
-        # Fetch order items
+        # ✅ Fetch order items
         cursor.execute(
             "SELECT item_name, item_price, quantity FROM order_items WHERE order_id = ?",
             (order_id,),
@@ -883,60 +864,40 @@ def get_order_details(order_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    # ✅ Retrieve order status
 
-
+# ✅ Retrieve order status without authentication
 @app.route("/order/<int:order_id>/status", methods=["GET"])
-@login_required()  # Requires login but allows both customers & restaurants
 def get_order_status(order_id):
-    """Retrieve the status of an order"""
+    """Retrieve the status of an order without authentication"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
         # Fetch order details
-        cursor.execute(
-            "SELECT customer_id, restaurant_id, status FROM orders WHERE id = ?",
-            (order_id,),
-        )
+        cursor.execute("SELECT status FROM orders WHERE id = ?", (order_id,))
         order = cursor.fetchone()
 
         if not order:
             conn.close()
             return jsonify({"error": "Order not found"}), 404
 
-        customer_id, restaurant_id, status = order
-
-        # 🔹 Authorization check: Only the customer or the restaurant can access the order status
-        user_id = session["user_id"]
-        user_role = session["role"]
-
-        if (
-            user_role == "customer" and user_id != customer_id
-        ):  # Check customer ownership
-            conn.close()
-            return jsonify({"error": "Unauthorized access"}), 403
-        if (
-            user_role == "restaurant" and user_id != restaurant_id
-        ):  # Check restaurant ownership
-            conn.close()
-            return jsonify({"error": "Unauthorized access"}), 403
-
         conn.close()
-        return jsonify({"order_id": order_id, "status": status}), 200
+        return jsonify({"order_id": order_id, "status": order[0]}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/orders/history/<int:customer_id>", methods=["GET"])
-@login_required("customer")  # Only customers can access this route
-def get_past_orders(customer_id):
-    """Fetch past orders for the logged-in customer"""
-    if session["user_id"] != customer_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+# ✅ Fetch past orders without authentication
+@app.route("/orders/history", methods=["GET"])
+def get_past_orders():
+    """Fetch past orders for a given customer"""
+    print(request.args["customer_ID"])
     try:
+        customer_id = request.args.get("customer_ID")
+        if not customer_id:
+            return jsonify({"error": "Missing customer ID"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -956,21 +917,23 @@ def get_past_orders(customer_id):
             conn.close()
             return jsonify({"message": "No past orders found"}), 200
 
-        # Fetch order items for each order
+        # ✅ Fetch order items for each order
         order_list = []
         for order in orders:
+            order_id, restaurant_id, status, timestamp = order
+
             cursor.execute(
                 "SELECT item_name, item_price, quantity FROM order_items WHERE order_id = ?",
-                (order[0],),
+                (order_id,),
             )
             items = cursor.fetchall()
 
             order_list.append(
                 {
-                    "order_id": order[0],
-                    "restaurant_id": order[1],
-                    "status": order[2],
-                    "timestamp": order[3],
+                    "order_id": order_id,
+                    "restaurant_id": restaurant_id,
+                    "status": status,
+                    "timestamp": timestamp,
                     "items": [
                         {"name": item[0], "price": item[1], "quantity": item[2]}
                         for item in items
@@ -985,15 +948,15 @@ def get_past_orders(customer_id):
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Fetch wallet balance for a customer
-@app.route("/wallet/customer/<int:customer_id>", methods=["GET"])
-@login_required("customer")  # Only customers can access this route
-def get_customer_wallet_balance(customer_id):
-    """Retrieve the wallet balance of the logged-in customer"""
-    if session["user_id"] != customer_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+# ✅ Retrieve customer wallet balance without authentication
+@app.route("/wallet/customer", methods=["GET"])
+def get_customer_wallet_balance():
+    """Retrieve the wallet balance of a given customer"""
     try:
+        customer_id = request.args.get("customer_id")
+        if not customer_id:
+            return jsonify({"error": "Missing customer ID"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -1012,15 +975,15 @@ def get_customer_wallet_balance(customer_id):
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Fetch wallet balance for a restaurant
-@app.route("/wallet/restaurant/<int:restaurant_id>", methods=["GET"])
-@login_required("restaurant")  # Only restaurants can access this route
-def get_restaurant_wallet_balance(restaurant_id):
-    """Allow only the logged-in restaurant to view its wallet balance"""
-    if session["user_id"] != restaurant_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+# ✅ Retrieve restaurant wallet balance without authentication
+@app.route("/wallet/restaurant", methods=["GET"])
+def get_restaurant_wallet_balance():
+    """Retrieve the wallet balance of a given restaurant"""
     try:
+        restaurant_id = request.args.get("restaurant_id")
+        if not restaurant_id:
+            return jsonify({"error": "Missing restaurant ID"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -1042,26 +1005,27 @@ def get_restaurant_wallet_balance(restaurant_id):
         return jsonify({"error": str(e)}), 500
 
 
+# ✅ Update order status without authentication
 @app.route("/order/<int:order_id>/status", methods=["PUT"])
-@login_required("restaurant")  # Only restaurants can update order statuses
 def update_order_status(order_id):
-    """Allow only the assigned restaurant to update order status"""
+    """Allow any restaurant to update order status by providing restaurant_id"""
     try:
         data = request.get_json()
+        restaurant_id = data.get("restaurant_id")
         new_status = data.get("status")
 
-        if new_status not in [
+        if not restaurant_id or new_status not in [
             "In Bearbeitung",
             "In Zubereitung",
             "Storniert",
             "Abgeschlossen",
         ]:
-            return jsonify({"error": "Invalid status"}), 400
+            return jsonify({"error": "Missing restaurant_id or invalid status"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Fetch the restaurant_id before updating the status
+        # ✅ Fetch the restaurant_id before updating the status
         cursor.execute("SELECT restaurant_id FROM orders WHERE id = ?", (order_id,))
         order = cursor.fetchone()
 
@@ -1069,19 +1033,19 @@ def update_order_status(order_id):
             conn.close()
             return jsonify({"error": "Order not found"}), 404
 
-        restaurant_id = order[0]
+        assigned_restaurant_id = order[0]
 
-        # 🔹 Authorization check: Only the assigned restaurant can update the order status
-        if session["user_id"] != restaurant_id:
+        # ✅ Authorization check: Only the assigned restaurant can update the order status
+        if int(restaurant_id) != assigned_restaurant_id:
             conn.close()
             return jsonify({"error": "Unauthorized access"}), 403
 
-        # Update order status
+        # ✅ Update order status
         cursor.execute(
             "UPDATE orders SET status = ? WHERE id = ?", (new_status, order_id)
         )
 
-        # Insert notification for the customer
+        # ✅ Insert notification for the customer
         notification_message = f"Order {order_id} status updated to {new_status}"
         cursor.execute(
             "INSERT INTO notifications (customer_id, message) VALUES ((SELECT customer_id FROM orders WHERE id = ?), ?)",
@@ -1101,16 +1065,21 @@ def update_order_status(order_id):
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Accept an order
+# ✅ Accept an order without authentication
 @app.route("/order/<int:order_id>/accept", methods=["PUT"])
-@login_required("restaurant")  # Only restaurants can accept orders
 def accept_order(order_id):
-    """Allow only the assigned restaurant to accept an order"""
+    """Allow any restaurant to accept an order by providing restaurant_id"""
     try:
+        data = request.get_json()
+        restaurant_id = data.get("restaurant_id")
+
+        if not restaurant_id:
+            return jsonify({"error": "Missing restaurant_id"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Fetch the restaurant_id before accepting the order
+        # ✅ Fetch the restaurant_id before accepting the order
         cursor.execute("SELECT restaurant_id FROM orders WHERE id = ?", (order_id,))
         order = cursor.fetchone()
 
@@ -1118,19 +1087,19 @@ def accept_order(order_id):
             conn.close()
             return jsonify({"error": "Order not found"}), 404
 
-        restaurant_id = order[0]
+        assigned_restaurant_id = order[0]
 
-        # 🔹 Authorization check: Only the assigned restaurant can accept the order
-        if session["user_id"] != restaurant_id:
+        # ✅ Authorization check: Only the assigned restaurant can accept the order
+        if int(restaurant_id) != assigned_restaurant_id:
             conn.close()
             return jsonify({"error": "Unauthorized access"}), 403
 
-        # Accept Order
+        # ✅ Accept Order
         cursor.execute(
             "UPDATE orders SET status = 'In Zubereitung' WHERE id = ?", (order_id,)
         )
 
-        # Notification: Order Accepted
+        # ✅ Notification: Order Accepted
         notification_message = f"Order {order_id} is now being prepared."
         cursor.execute(
             "INSERT INTO notifications (customer_id, message) VALUES ((SELECT customer_id FROM orders WHERE id = ?), ?)",
@@ -1145,16 +1114,21 @@ def accept_order(order_id):
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Decline an order
+# ✅ Decline an order without authentication
 @app.route("/order/<int:order_id>/decline", methods=["PUT"])
-@login_required("restaurant")  # Only restaurants can decline orders
 def decline_order(order_id):
-    """Allow only the assigned restaurant to decline an order"""
+    """Allow any restaurant to decline an order by providing restaurant_id"""
     try:
+        data = request.get_json()
+        restaurant_id = data.get("restaurant_id")
+
+        if not restaurant_id:
+            return jsonify({"error": "Missing restaurant_id"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Fetch the restaurant_id before declining the order
+        # ✅ Fetch the restaurant_id before declining the order
         cursor.execute("SELECT restaurant_id FROM orders WHERE id = ?", (order_id,))
         order = cursor.fetchone()
 
@@ -1162,19 +1136,19 @@ def decline_order(order_id):
             conn.close()
             return jsonify({"error": "Order not found"}), 404
 
-        restaurant_id = order[0]
+        assigned_restaurant_id = order[0]
 
-        # 🔹 Authorization check: Only the assigned restaurant can decline the order
-        if session["user_id"] != restaurant_id:
+        # ✅ Authorization check: Only the assigned restaurant can decline the order
+        if int(restaurant_id) != assigned_restaurant_id:
             conn.close()
             return jsonify({"error": "Unauthorized access"}), 403
 
-        # Decline Order
+        # ✅ Decline Order
         cursor.execute(
             "UPDATE orders SET status = 'Storniert' WHERE id = ?", (order_id,)
         )
 
-        # Notification: Order Declined
+        # ✅ Notification: Order Declined
         notification_message = f"Order {order_id} has been canceled."
         cursor.execute(
             "INSERT INTO notifications (customer_id, message) VALUES ((SELECT customer_id FROM orders WHERE id = ?), ?)",
@@ -1189,22 +1163,22 @@ def decline_order(order_id):
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Update business settings (Operating Hours & Delivery Radius)
-@app.route("/restaurant/<int:restaurant_id>/settings", methods=["PUT"])
-@login_required("restaurant")  # Only restaurants can access this route
-def update_business_settings(restaurant_id):
-    """Allow only the restaurant owner to update business settings"""
-    if session["user_id"] != restaurant_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+@app.route("/restaurant/settings", methods=["PUT"])
+def update_business_settings():
+    """Allow any restaurant to update business settings"""
     try:
         data = request.get_json()
-        if not all(k in data for k in ("business_hours", "delivery_radius")):
-            return jsonify({"error": "Missing required fields"}), 400
+        restaurant_id = data.get("restaurant_id")
+
+        if not restaurant_id or not all(
+            k in data for k in ("business_hours", "delivery_radius")
+        ):
+            return jsonify({"error": "Missing restaurant_id or required fields"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # ✅ Update restaurant business settings
         cursor.execute(
             """
             UPDATE restaurants 
@@ -1215,6 +1189,7 @@ def update_business_settings(restaurant_id):
         )
 
         if cursor.rowcount == 0:
+            conn.close()
             return jsonify({"error": "Restaurant not found"}), 404
 
         conn.commit()
@@ -1225,19 +1200,20 @@ def update_business_settings(restaurant_id):
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/notifications/<int:restaurant_id>", methods=["GET"])
-@login_required("restaurant")  # Only restaurants can access this route
-def get_notifications(restaurant_id):
-    """Allow only the logged-in restaurant to fetch its notifications"""
-    if session["user_id"] != restaurant_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+@app.route("/notifications/restaurant", methods=["GET"])
+def get_notifications():
+    """Allow any restaurant to fetch its notifications"""
     try:
+        restaurant_id = request.args.get("restaurant_id")
         include_read = request.args.get("include_read", "false").lower() == "true"
+
+        if not restaurant_id:
+            return jsonify({"error": "Missing restaurant_id"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # ✅ Fetch restaurant notifications based on read status
         if include_read:
             cursor.execute(
                 "SELECT id, message, timestamp FROM notifications WHERE restaurant_id = ?",
@@ -1266,17 +1242,19 @@ def get_notifications(restaurant_id):
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/notifications/<int:customer_id>", methods=["GET"])
-@login_required("customer")
-def get_customer_notifications(customer_id):
-    """Allow only the logged-in customer to fetch their notifications"""
-    if session["user_id"] != customer_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+@app.route("/notifications/customer", methods=["GET"])
+def get_customer_notifications():
+    """Allow any customer to fetch their notifications"""
     try:
+        customer_id = request.args.get("customer_id")
+
+        if not customer_id:
+            return jsonify({"error": "Missing customer_id"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # ✅ Fetch customer notifications that are unread
         cursor.execute(
             "SELECT id, message, timestamp FROM notifications WHERE customer_id = ? AND read_status = 0",
             (customer_id,),
@@ -1300,14 +1278,19 @@ def get_customer_notifications(customer_id):
 
 # Restaurant notification delete route
 @app.route("/restaurant/notifications/<int:notification_id>", methods=["DELETE"])
-@login_required("restaurant")  # Only restaurants can delete their notifications
 def delete_restaurant_notification(notification_id):
-    """Allow only the logged-in restaurant to delete its own notifications"""
+    """Allow any restaurant to delete its own notifications"""
     try:
+        data = request.get_json()
+        restaurant_id = data.get("restaurant_id")
+
+        if not restaurant_id:
+            return jsonify({"error": "Missing restaurant_id"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Fetch the restaurant_id associated with the notification
+        # ✅ Fetch the restaurant_id associated with the notification
         cursor.execute(
             "SELECT restaurant_id FROM notifications WHERE id = ?", (notification_id,)
         )
@@ -1317,14 +1300,14 @@ def delete_restaurant_notification(notification_id):
             conn.close()
             return jsonify({"error": "Notification not found"}), 404
 
-        restaurant_id = notification[0]
+        assigned_restaurant_id = notification[0]
 
-        # Authorization check: Only the assigned restaurant can delete the notification
-        if session["user_id"] != restaurant_id:
+        # ✅ Authorization check: Only the assigned restaurant can delete the notification
+        if int(restaurant_id) != assigned_restaurant_id:
             conn.close()
             return jsonify({"error": "Unauthorized access"}), 403
 
-        # Delete the notification
+        # ✅ Delete the notification
         cursor.execute("DELETE FROM notifications WHERE id = ?", (notification_id,))
         conn.commit()
         conn.close()
@@ -1338,16 +1321,20 @@ def delete_restaurant_notification(notification_id):
         return jsonify({"error": str(e)}), 500
 
 
-# Customer notification delete route
 @app.route("/customer/notifications/<int:notification_id>", methods=["DELETE"])
-@login_required("customer")  # Only customers can delete their notifications
 def delete_customer_notification(notification_id):
-    """Allow only the logged-in customer to delete their own notifications"""
+    """Allow any customer to delete their own notifications"""
     try:
+        data = request.get_json()
+        customer_id = data.get("customer_id")
+
+        if not customer_id:
+            return jsonify({"error": "Missing customer_id"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Fetch the customer_id associated with the notification
+        # ✅ Fetch the customer_id associated with the notification
         cursor.execute(
             "SELECT customer_id FROM notifications WHERE id = ?", (notification_id,)
         )
@@ -1357,14 +1344,14 @@ def delete_customer_notification(notification_id):
             conn.close()
             return jsonify({"error": "Notification not found"}), 404
 
-        customer_id = notification[0]
+        assigned_customer_id = notification[0]
 
-        # Authorization check: Only the assigned customer can delete the notification
-        if session["user_id"] != customer_id:
+        # ✅ Authorization check: Only the assigned customer can delete the notification
+        if int(customer_id) != assigned_customer_id:
             conn.close()
             return jsonify({"error": "Unauthorized access"}), 403
 
-        # Delete the notification
+        # ✅ Delete the notification
         cursor.execute("DELETE FROM notifications WHERE id = ?", (notification_id,))
         conn.commit()
         conn.close()
@@ -1377,22 +1364,25 @@ def delete_customer_notification(notification_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    # ✅ Virtual Wallet System
 
-
-# Get user balance
-@app.route("/wallet/<int:user_id>", methods=["GET"])
-@login_required()  # Requires login, allows both customers & restaurants
-def get_balance(user_id):
-    """Retrieve the wallet balance of the logged-in user"""
-    if session["user_id"] != user_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-
+@app.route("/wallet", methods=["GET"])
+def get_balance():
+    """Retrieve the wallet balance of a user"""
     try:
+        user_id = request.args.get("user_id")
+        user_role = request.args.get("user_role")
+
+        if not user_id or not user_role:
+            return jsonify({"error": "Missing user_id or user_role"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+        # ✅ Determine the correct table based on user role
+        table = "customers" if user_role == "customer" else "restaurants"
+
+        # ✅ Fetch wallet balance
+        cursor.execute(f"SELECT wallet_balance FROM {table} WHERE id = ?", (user_id,))
         balance = cursor.fetchone()
         conn.close()
 
@@ -1405,10 +1395,9 @@ def get_balance(user_id):
         return jsonify({"error": str(e)}), 500
 
 
-# Process Payment (Customer to Restaurant & Platform Fee)
 @app.route("/payment", methods=["POST"])
 def process_payment():
-    """Handle payments from customer to restaurant with Lieferspatz platform fee"""
+    """Handle payments from a customer to a restaurant"""
     try:
         data = request.get_json()
         required_fields = ["customer_id", "restaurant_id", "order_id", "amount"]
@@ -1427,30 +1416,34 @@ def process_payment():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Check if customer has enough balance
-        cursor.execute("SELECT balance FROM users WHERE id = ?", (customer_id,))
+        # ✅ Check if customer has enough balance
+        cursor.execute(
+            "SELECT wallet_balance FROM customers WHERE id = ?", (customer_id,)
+        )
         customer_balance = cursor.fetchone()
+
         if not customer_balance or customer_balance[0] < total_amount:
+            conn.close()
             return jsonify({"error": "Insufficient balance"}), 400
 
-        # Deduct from customer
+        # ✅ Deduct from customer
         cursor.execute(
-            "UPDATE users SET balance = balance - ? WHERE id = ?",
+            "UPDATE customers SET wallet_balance = wallet_balance - ? WHERE id = ?",
             (total_amount, customer_id),
         )
 
-        # Add to restaurant
+        # ✅ Add to restaurant
         cursor.execute(
-            "UPDATE users SET balance = balance + ? WHERE id = ?",
+            "UPDATE restaurants SET wallet_balance = wallet_balance + ? WHERE id = ?",
             (restaurant_amount, restaurant_id),
         )
 
-        # Add to Lieferspatz platform (hidden, only in DB)
+        # ✅ Add to Lieferspatz platform earnings
         cursor.execute(
-            "UPDATE users SET balance = balance + ? WHERE id = 0", (platform_fee,)
-        )  # ID 0 = Lieferspatz
+            "INSERT INTO lieferspatz_balance (amount) VALUES (?)", (platform_fee,)
+        )
 
-        # Log the transaction
+        # ✅ Log the transaction
         cursor.execute(
             """
             INSERT INTO transactions (customer_id, restaurant_id, order_id, amount, platform_fee)
@@ -1468,5 +1461,11 @@ def process_payment():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/logout", methods=["POST"])
+def logout():
+    """Handle user logout"""
+    return jsonify({"success": True, "message": "User logged out successfully"}), 200
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
