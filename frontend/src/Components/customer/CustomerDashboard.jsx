@@ -108,16 +108,8 @@ const CustomerDashboard = () => {
             </ul>
           </div>
 
-          {/* Customer Balance Section */}
-          <div className="mb-4">
-            <h5 className="text-success"> Customer Balance</h5>
-            {/* data.wallet_balance */}
-            {/* not available */}
-          </div>
-
           {/* Logout Button */}
           <div>
-            <h5 className="text-success">✔ Logout Button</h5>
             <button className="btn btn-danger" onClick={handleLogout}>Logout</button>
           </div>
         </div>
