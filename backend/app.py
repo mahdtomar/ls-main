@@ -1,10 +1,10 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from flask_session import Session  # Added for session management
-from datetime import timedelta  # Add this import at the top
+from flask_bcrypt import Bcrypt
 import sqlite3
 import os
 from functools import wraps
+from auth_utils import generate_jwt, decode_jwt, jwt_required  # Import JWT helper functions
 
 # Database Path
 DB_PATH = os.path.abspath('lieferspatz.db')
@@ -22,70 +22,103 @@ def get_db_connection():
         print(f"❌ Database connection error: {e}")
         return None
 
+
 app = Flask(__name__)
+
 CORS(app,
      resources={r"/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
-                       "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                       "allow_headers": ["Content-Type"],
-                       "supports_credentials": True}},
-     expose_headers=["Content-Range", "X-Content-Range"])
+                        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                        "allow_headers": ["Content-Type", "Authorization"]}})
 
-# 🔹 Session Configuration
-app.config["SECRET_KEY"] = "your_secure_random_secret_key"  # Keep your existing secret key
-app.config["SESSION_TYPE"] = "filesystem"  # ✅ Ensures sessions are stored persistently
-app.config["SESSION_PERMANENT"] = True  # ✅ Sessions persist across browser refresh
-app.config["SESSION_USE_SIGNER"] = True  # ✅ Adds extra security to session cookies
-app.config["SESSION_FILE_DIR"] = "./flask_session"  # ✅ Explicit directory for session files
-app.config["SESSION_FILE_THRESHOLD"] = 100  # ✅ Limits session file count to avoid overflow
-
-app.config.update(
-    SESSION_COOKIE_SECURE=False,  # ✅ Set to False for local dev (Change to True in production)
-    SESSION_COOKIE_HTTPONLY=True,  # ✅ Prevents client-side JS from accessing cookies
-    SESSION_COOKIE_SAMESITE='Lax',  # ✅ Prevents CSRF while allowing same-site requests
-    PERMANENT_SESSION_LIFETIME=timedelta(days=7)  # ✅ Sessions last 7 days
-)
-
-Session(app)  # ✅ Initializes Flask-Session
+bcrypt = Bcrypt(app)
 
 
+# ✅ User Login (JWT-based)
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Fetch user from the database
+    cursor.execute("SELECT id, password, role FROM users WHERE email = ?", (data['email'],))
+    user = cursor.fetchone()
+    conn.close()
+
+    if user and bcrypt.check_password_hash(user[1], data['password']):
+        token = generate_jwt(user[0], user[2])  # Include user role in JWT
+        return jsonify({"token": token}), 200  # Return JWT token
+    
+    return jsonify({"message": "Invalid credentials"}), 401
+
+
+# ✅ Get Profile (JWT-based)
+@app.route('/profile', methods=['GET'])
+@jwt_required
+def profile(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, email, role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    return jsonify({"id": user[0], "email": user[1], "role": user[2]})
+
+
+# ✅ Home Route
 @app.route('/')
 def home():
     return "Welcome to Lieferspatz Backend API!"
 
-@app.route('/session')
-def check_session():
-    return jsonify({"user_id": session.get("user_id"), "role": session.get("role")})
+
+# ✅ Check Session (JWT-based)
+@app.route('/session', methods=['GET'])
+@jwt_required
+def check_session(user_id):
+    """Check if the user is authenticated (JWT-based)."""
+    return jsonify({"user_id": user_id})  # No role stored in JWT unless added explicitly
 
 
-#✅ Add a Session Check Function (Reusable)
-def login_required(role=None):
+# ✅ Role-Based Authorization Decorator (JWT-based)
+def jwt_role_required(role=None):
     def decorator(f):
         @wraps(f)
-        def decorated_function(*args, **kwargs):
-            # Check if user is logged in
-            user_id = session.get('user_id')
-            if not user_id:
-                return jsonify({'error': 'Unauthorized. Please log in.'}), 401
-            
-            # If role is specified, check if user has correct role
-            if role:
-                user_role = session.get('role')
-                if user_role != role:
-                    return jsonify({'error': f'Access denied. Required role: {role}'}), 403
-            
-            return f(*args, **kwargs)
+        def decorated_function(user_id, *args, **kwargs):
+            # Extract user info from JWT
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # Fetch user role from DB
+            cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+            user = cursor.fetchone()
+            conn.close()
+
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+
+            user_role = user[0]  # Extract role
+
+            # If a specific role is required, check it
+            if role and user_role != role:
+                return jsonify({'error': f'Access denied. Required role: {role}'}), 403
+
+            return f(user_id, *args, **kwargs)
+
         return decorated_function
     return decorator
 
-#Logout Route Code
+# ✅ Logout Route (JWT-based)
 @app.route('/logout', methods=['POST'])
 def logout():
-    """Logs out the user by clearing the session."""
-    session.clear()  # Removes user_id and role from session
-    return jsonify({'success': True, 'message': 'Logged out successfully'}), 200
+    """Logs out the user (JWT does not require clearing session)"""
+    return jsonify({'success': True, 'message': 'Logout handled on the client-side by clearing token'}), 200
 
 
-# ✅ Create a new customer
+# ✅ Create a new customer (with hashed password)
 @app.route('/customer', methods=['POST'])
 def create_customer():
     try:
@@ -96,6 +129,9 @@ def create_customer():
         required_fields = ['first_name', 'last_name', 'street_name', 'house_number', 'city', 'zip_code', 'password']
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), 400
+
+        # Hash the password before storing it
+        hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
 
         # Get database connection
         conn = get_db_connection()
@@ -108,7 +144,7 @@ def create_customer():
         cursor.execute('''
             INSERT INTO customers (first_name, last_name, street_name, house_number, city, zip_code, password, wallet_balance)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (data['first_name'], data['last_name'], data['street_name'], data['house_number'], data['city'], data['zip_code'], data['password'], 100))
+        ''', (data['first_name'], data['last_name'], data['street_name'], data['house_number'], data['city'], data['zip_code'], hashed_password, 100))
 
         conn.commit()
         customer_id = cursor.lastrowid
@@ -121,7 +157,9 @@ def create_customer():
             conn.close()  # Ensure connection is closed in case of an error
         print(f"❌ Error creating customer: {e}")  # Log the error for debugging
         return jsonify({'error': str(e)}), 500
+
     
+# ✅ Create a new restaurant (with hashed password)
 @app.route('/restaurant', methods=['POST'])
 def create_restaurant():
     try:
@@ -132,6 +170,9 @@ def create_restaurant():
         required_fields = ['name', 'street_name', 'house_number', 'city', 'zip_code', 'description', 'password']
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), 400
+
+        # Hash the password before storing it
+        hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
 
         # Get database connection
         conn = get_db_connection()
@@ -144,7 +185,7 @@ def create_restaurant():
         cursor.execute('''
             INSERT INTO restaurants (name, street_name, house_number, city, zip_code, description, password, wallet_balance)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (data['name'], data['street_name'], data['house_number'], data['city'], data['zip_code'], data['description'], data['password'], 0))
+        ''', (data['name'], data['street_name'], data['house_number'], data['city'], data['zip_code'], data['description'], hashed_password, 0))
 
         conn.commit()
         restaurant_id = cursor.lastrowid
@@ -157,9 +198,9 @@ def create_restaurant():
             conn.close()  # Ensure connection is closed in case of an error
         print(f"❌ Error creating restaurant: {e}")  # Log the error for debugging
         return jsonify({'error': str(e)}), 500
+
     
-# ✅ Restaurant login with session
-# ✅ Restaurant login with session
+# ✅ Restaurant login with JWT
 @app.route('/restaurant/login', methods=['POST'])
 def login_restaurant():
     try:
@@ -170,34 +211,27 @@ def login_restaurant():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT id FROM restaurants WHERE name = ? AND password = ?", 
-                       (name, password))
+        # Fetch restaurant ID and hashed password from database
+        cursor.execute("SELECT id, password FROM restaurants WHERE name = ?", (name,))
         restaurant = cursor.fetchone()
-
         conn.close()
 
         if restaurant:
-            # ✅ Ensure session persists across browser refresh
-            session.permanent = True  
-            session['user_id'] = restaurant[0]
-            session['role'] = 'restaurant'
+            restaurant_id, hashed_password = restaurant
 
-            # 🔹 Force Flask to save session changes
-            session.modified = True  
+            # Check if the provided password matches the stored hashed password
+            if bcrypt.check_password_hash(hashed_password, password):
+                token = generate_jwt(restaurant_id)  # Generate JWT token
+                
+                return jsonify({'success': True, 'restaurant_id': restaurant_id, 'token': token}), 200
 
-            print("✅ Session set:", dict(session))  # Debugging output
-
-            return jsonify({'success': True, 'restaurant_id': restaurant[0]}), 200
-        else:
-            return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
+        return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
-
-
-# ✅ Customer login with session
+# ✅ Customer login with JWT
 @app.route('/customer/login', methods=['POST'])
 def login_customer():
     try:
@@ -209,26 +243,22 @@ def login_customer():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT id FROM customers WHERE first_name = ? AND last_name = ? AND password = ?", 
-                       (first_name, last_name, password))
+        # Fetch customer ID and hashed password from database
+        cursor.execute("SELECT id, password FROM customers WHERE first_name = ? AND last_name = ?", 
+                       (first_name, last_name))
         customer = cursor.fetchone()
-
         conn.close()
 
         if customer:
-            # ✅ Ensure session persists across browser refresh
-            session.permanent = True  
-            session['user_id'] = customer[0]
-            session['role'] = 'customer'
+            customer_id, hashed_password = customer
 
-            # 🔹 Force Flask to save session changes
-            session.modified = True  
+            # Check if the provided password matches the stored hashed password
+            if bcrypt.check_password_hash(hashed_password, password):
+                token = generate_jwt(customer_id)  # Generate JWT token
+                
+                return jsonify({'success': True, 'customer_id': customer_id, 'token': token}), 200
 
-            print("✅ Session set:", dict(session))  # Debugging output
-
-            return jsonify({'success': True, 'customer_id': customer[0]}), 200
-        else:
-            return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
+        return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -236,11 +266,13 @@ def login_customer():
 
 
 
+
+# ✅ Customer Profile (JWT-based)
 @app.route('/customer/<int:customer_id>/profile', methods=['GET'])
-@login_required('customer')  # Only customers can view their own profile
-def get_customer_profile(customer_id):
+@jwt_role_required('customer')  # Only customers can view their own profile
+def get_customer_profile(user_id, customer_id):
     """Retrieve personal details of the logged-in customer"""
-    if session['user_id'] != customer_id:
+    if user_id != customer_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -272,7 +304,8 @@ def get_customer_profile(customer_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-#Filter restaurants based on delivery ZIP code
+
+# ✅ Filter restaurants based on delivery ZIP code (No authentication required)
 @app.route('/restaurants', methods=['GET'])
 def get_restaurants():
     try:
@@ -303,7 +336,8 @@ def get_restaurants():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ✅ Fetch restaurant menu
+
+# ✅ Fetch restaurant menu (No authentication required)
 @app.route('/restaurant/<int:restaurant_id>/menu', methods=['GET'])
 def get_restaurant_menu(restaurant_id):
     try:
@@ -326,17 +360,18 @@ def get_restaurant_menu(restaurant_id):
         return jsonify({'error': str(e)}), 500
 
 
-# ✅ Create an order
+
+# ✅ Create an order (JWT-based)
 @app.route('/order', methods=['POST'])
-@login_required('customer')  # Only customers can place orders
-def create_order():
+@jwt_role_required('customer')  # Only customers can place orders
+def create_order(user_id):
     """Allow only the logged-in customer to place an order"""
     try:
         data = request.get_json()
         if not data:
             return jsonify({'error': 'Invalid or missing JSON payload'}), 400
 
-        customer_id = session['user_id']  # 🔹 Use session to ensure only the logged-in customer is making the order
+        customer_id = user_id  # Use JWT user_id instead of session
         restaurant_id = data.get('restaurant_id')
         items = data.get('items')
 
@@ -410,16 +445,16 @@ def create_order():
 
 
 
-#Allow customers to review and modify thier cart before ordering
+# ✅ Allow customers to review and modify their cart before ordering
 cart = {}  # Store temporary cart data
 
 @app.route('/cart', methods=['POST'])
-@login_required('customer')  # Only customers can add to cart
-def add_to_cart():
+@jwt_role_required('customer')  # Only customers can add to cart
+def add_to_cart(user_id):
     """Allow only the logged-in customer to add items to their cart"""
     try:
         data = request.get_json()
-        customer_id = session['user_id']  # 🔹 Use session to ensure ownership
+        customer_id = user_id  # Use JWT user_id instead of session
 
         if data['customer_id'] != customer_id:
             return jsonify({'error': 'Unauthorized access'}), 403
@@ -440,11 +475,13 @@ def add_to_cart():
 
 
 
+
+# ✅ Allow customers to view their cart (JWT-based)
 @app.route('/cart/<int:customer_id>', methods=['GET'])
-@login_required('customer')  # Only customers can view their cart
-def view_cart(customer_id):
+@jwt_role_required('customer')  # Only customers can view their cart
+def view_cart(user_id, customer_id):
     """Allow only the logged-in customer to view their cart"""
-    if session['user_id'] != customer_id:
+    if user_id != customer_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -468,12 +505,13 @@ def view_cart(customer_id):
 
 
 
-#Remove item from cart
+
+# ✅ Remove item from cart (JWT-based)
 @app.route('/cart/<int:customer_id>', methods=['DELETE'])
-@login_required('customer')  # Only customers can remove items from their cart
-def remove_from_cart(customer_id):
+@jwt_role_required('customer')  # Only customers can remove items from their cart
+def remove_from_cart(user_id, customer_id):
     """Allow only the logged-in customer to remove items from their cart"""
-    if session['user_id'] != customer_id:
+    if user_id != customer_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -493,11 +531,13 @@ def remove_from_cart(customer_id):
         return jsonify({'error': str(e)}), 500
 
 
-# View Customer Orders (Now Includes Ordered Items)
+
+# ✅ View Customer Orders (JWT-based)
 @app.route('/customer/orders', methods=['GET'])
-@login_required('customer')
-def customer_orders():
-    customer_id = session['user_id']  # Get customer ID from session
+@jwt_role_required('customer')
+def customer_orders(user_id):
+    """Retrieve all orders placed by the logged-in customer"""
+    customer_id = user_id  # Use JWT user_id instead of session
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -535,12 +575,12 @@ def customer_orders():
     return jsonify({'orders': order_list}), 200
 
 
-
-# View Restaurant Orders (Now Includes Ordered Items & Customer Info)
+# ✅ View Restaurant Orders (JWT-based)
 @app.route('/restaurant/orders', methods=['GET'])
-@login_required('restaurant')
-def restaurant_orders():
-    restaurant_id = session['user_id']  # Get restaurant ID from session
+@jwt_role_required('restaurant')
+def restaurant_orders(user_id):
+    """Retrieve all orders received by the logged-in restaurant"""
+    restaurant_id = user_id  # Use JWT user_id instead of session
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -583,11 +623,12 @@ def restaurant_orders():
 
 
 
-# ✅ Modify menu item price
+# ✅ Modify menu item price (JWT-based)
 @app.route('/restaurant/<int:restaurant_id>/menu/<int:item_id>', methods=['PUT'])
-@login_required('restaurant')
-def update_menu_item(restaurant_id, item_id):
-    if session['user_id'] != restaurant_id:
+@jwt_role_required('restaurant')
+def update_menu_item(user_id, restaurant_id, item_id):
+    """Allow only the restaurant owner to update the menu item price"""
+    if user_id != restaurant_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -614,13 +655,13 @@ def update_menu_item(restaurant_id, item_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-    
-#Add Menu Management (Add/Edit/Delete items)
-# ✅ Add a new menu item
+
+# ✅ Add a new menu item (JWT-based)
 @app.route('/restaurant/<int:restaurant_id>/menu', methods=['POST'])
-@login_required('restaurant')
-def add_menu_item(restaurant_id):
-    if session['user_id'] != restaurant_id:
+@jwt_role_required('restaurant')
+def add_menu_item(user_id, restaurant_id):
+    """Allow only the restaurant owner to add a menu item"""
+    if user_id != restaurant_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -644,12 +685,12 @@ def add_menu_item(restaurant_id):
         return jsonify({'error': str(e)}), 500
 
 
-
-# ✅ Delete a menu item
+# ✅ Delete a menu item (JWT-based)
 @app.route('/restaurant/<int:restaurant_id>/menu/<int:item_id>', methods=['DELETE'])
-@login_required('restaurant')
-def delete_menu_item(restaurant_id, item_id):
-    if session['user_id'] != restaurant_id:
+@jwt_role_required('restaurant')
+def delete_menu_item(user_id, restaurant_id, item_id):
+    """Allow only the restaurant owner to delete a menu item"""
+    if user_id != restaurant_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -669,11 +710,11 @@ def delete_menu_item(restaurant_id, item_id):
         return jsonify({'error': str(e)}), 500
 
 
-
-# ✅ Get order details
+# ✅ Get order details (JWT-based, allows customers & restaurants)
 @app.route('/order/<int:order_id>', methods=['GET'])
-@login_required()  # Requires login but allows both customers & restaurants
-def get_order_details(order_id):
+@jwt_required  # Requires authentication but allows both customers & restaurants
+def get_order_details(user_id):
+    """Allow customers or restaurants to retrieve order details"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -684,13 +725,18 @@ def get_order_details(order_id):
         if not order:
             return jsonify({'error': 'Order not found'}), 404
 
-        # 🔹 Authorization check: Allow only the order's customer or restaurant
-        user_id = session['user_id']
-        user_role = session['role']
+        order_id, customer_id, restaurant_id, status, timestamp = order
 
-        if user_role == 'customer' and user_id != order[1]:  # Check customer ownership
+        # 🔹 Authorization check: Allow only the order's customer or restaurant
+        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+        user_role = cursor.fetchone()
+
+        if user_role:
+            user_role = user_role[0]  # Extract role from tuple
+
+        if user_role == 'customer' and user_id != customer_id:  # Check customer ownership
             return jsonify({'error': 'Unauthorized access'}), 403
-        if user_role == 'restaurant' and user_id != order[2]:  # Check restaurant ownership
+        if user_role == 'restaurant' and user_id != restaurant_id:  # Check restaurant ownership
             return jsonify({'error': 'Unauthorized access'}), 403
 
         # Fetch order items
@@ -698,11 +744,11 @@ def get_order_details(order_id):
         items = cursor.fetchall()
 
         order_details = {
-            'order_id': order[0],
-            'customer_id': order[1],
-            'restaurant_id': order[2],
-            'status': order[3],
-            'timestamp': order[4],
+            'order_id': order_id,
+            'customer_id': customer_id,
+            'restaurant_id': restaurant_id,
+            'status': status,
+            'timestamp': timestamp,
             'items': [{'name': i[0], 'price': i[1], 'quantity': i[2]} for i in items]
         }
 
@@ -713,11 +759,10 @@ def get_order_details(order_id):
         return jsonify({'error': str(e)}), 500
 
 
-
-    # ✅ Retrieve order status
+# ✅ Retrieve order status (JWT-based, allows customers & restaurants)
 @app.route('/order/<int:order_id>/status', methods=['GET'])
-@login_required()  # Requires login but allows both customers & restaurants
-def get_order_status(order_id):
+@jwt_required  # Requires authentication but allows both customers & restaurants
+def get_order_status(user_id, order_id):
     """Retrieve the status of an order"""
     try:
         conn = get_db_connection()
@@ -734,8 +779,11 @@ def get_order_status(order_id):
         customer_id, restaurant_id, status = order
 
         # 🔹 Authorization check: Only the customer or the restaurant can access the order status
-        user_id = session['user_id']
-        user_role = session['role']
+        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+        user_role = cursor.fetchone()
+
+        if user_role:
+            user_role = user_role[0]  # Extract role from tuple
 
         if user_role == 'customer' and user_id != customer_id:  # Check customer ownership
             conn.close()
@@ -751,12 +799,15 @@ def get_order_status(order_id):
         return jsonify({"error": str(e)}), 500
 
 
+
+
     
+# ✅ Fetch past orders for the logged-in customer (JWT-based)
 @app.route('/orders/history/<int:customer_id>', methods=['GET'])
-@login_required('customer')  # Only customers can access this route
-def get_past_orders(customer_id):
+@jwt_role_required('customer')  # Only customers can access this route
+def get_past_orders(user_id, customer_id):
     """Fetch past orders for the logged-in customer"""
-    if session['user_id'] != customer_id:
+    if user_id != customer_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -802,12 +853,12 @@ def get_past_orders(customer_id):
 
 
 
-# ✅ Fetch wallet balance for a customer
+# ✅ Fetch wallet balance for a customer (JWT-based)
 @app.route('/wallet/customer/<int:customer_id>', methods=['GET'])
-@login_required('customer')  # Only customers can access this route
-def get_customer_wallet_balance(customer_id):
+@jwt_role_required('customer')  # Only customers can access this route
+def get_customer_wallet_balance(user_id, customer_id):
     """Retrieve the wallet balance of the logged-in customer"""
-    if session['user_id'] != customer_id:
+    if user_id != customer_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -828,12 +879,13 @@ def get_customer_wallet_balance(customer_id):
 
 
 
-# ✅ Fetch wallet balance for a restaurant
+
+# ✅ Fetch wallet balance for a restaurant (JWT-based)
 @app.route('/wallet/restaurant/<int:restaurant_id>', methods=['GET'])
-@login_required('restaurant')  # Only restaurants can access this route
-def get_restaurant_wallet_balance(restaurant_id):
+@jwt_role_required('restaurant')  # Only restaurants can access this route
+def get_restaurant_wallet_balance(user_id, restaurant_id):
     """Allow only the logged-in restaurant to view its wallet balance"""
-    if session['user_id'] != restaurant_id:
+    if user_id != restaurant_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -853,10 +905,12 @@ def get_restaurant_wallet_balance(restaurant_id):
         return jsonify({'error': str(e)}), 500
 
 
+
     
+# ✅ Update order status (JWT-based, only restaurants)
 @app.route('/order/<int:order_id>/status', methods=['PUT'])
-@login_required('restaurant')  # Only restaurants can update order statuses
-def update_order_status(order_id):
+@jwt_role_required('restaurant')  # Only restaurants can update order statuses
+def update_order_status(user_id, order_id):
     """Allow only the assigned restaurant to update order status"""
     try:
         data = request.get_json()
@@ -879,7 +933,7 @@ def update_order_status(order_id):
         restaurant_id = order[0]
 
         # 🔹 Authorization check: Only the assigned restaurant can update the order status
-        if session['user_id'] != restaurant_id:
+        if user_id != restaurant_id:
             conn.close()
             return jsonify({'error': 'Unauthorized access'}), 403
 
@@ -899,10 +953,11 @@ def update_order_status(order_id):
         return jsonify({'error': str(e)}), 500
 
 
-# ✅ Accept an order
+
+# ✅ Accept an order (JWT-based, only restaurants)
 @app.route('/order/<int:order_id>/accept', methods=['PUT'])
-@login_required('restaurant')  # Only restaurants can accept orders
-def accept_order(order_id):
+@jwt_role_required('restaurant')  # Only restaurants can accept orders
+def accept_order(user_id, order_id):
     """Allow only the assigned restaurant to accept an order"""
     try:
         conn = get_db_connection()
@@ -919,7 +974,7 @@ def accept_order(order_id):
         restaurant_id = order[0]
 
         # 🔹 Authorization check: Only the assigned restaurant can accept the order
-        if session['user_id'] != restaurant_id:
+        if user_id != restaurant_id:
             conn.close()
             return jsonify({'error': 'Unauthorized access'}), 403
 
@@ -939,11 +994,10 @@ def accept_order(order_id):
         return jsonify({'error': str(e)}), 500
 
 
-
-# ✅ Decline an order
+# ✅ Decline an order (JWT-based, only restaurants)
 @app.route('/order/<int:order_id>/decline', methods=['PUT'])
-@login_required('restaurant')  # Only restaurants can decline orders
-def decline_order(order_id):
+@jwt_role_required('restaurant')  # Only restaurants can decline orders
+def decline_order(user_id, order_id):
     """Allow only the assigned restaurant to decline an order"""
     try:
         conn = get_db_connection()
@@ -960,7 +1014,7 @@ def decline_order(order_id):
         restaurant_id = order[0]
 
         # 🔹 Authorization check: Only the assigned restaurant can decline the order
-        if session['user_id'] != restaurant_id:
+        if user_id != restaurant_id:
             conn.close()
             return jsonify({'error': 'Unauthorized access'}), 403
 
@@ -980,12 +1034,13 @@ def decline_order(order_id):
         return jsonify({'error': str(e)}), 500
 
 
-# ✅ Update business settings (Operating Hours & Delivery Radius)
+
+# ✅ Update business settings (Operating Hours & Delivery Radius) (JWT-based)
 @app.route('/restaurant/<int:restaurant_id>/settings', methods=['PUT'])
-@login_required('restaurant')  # Only restaurants can access this route
-def update_business_settings(restaurant_id):
+@jwt_role_required('restaurant')  # Only restaurants can access this route
+def update_business_settings(user_id, restaurant_id):
     """Allow only the restaurant owner to update business settings"""
-    if session['user_id'] != restaurant_id:
+    if user_id != restaurant_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -1013,13 +1068,12 @@ def update_business_settings(restaurant_id):
         return jsonify({'error': str(e)}), 500
 
 
-
-
+# ✅ Fetch restaurant notifications (JWT-based)
 @app.route('/notifications/<int:restaurant_id>', methods=['GET'])
-@login_required('restaurant')  # Only restaurants can access this route
-def get_notifications(restaurant_id):
+@jwt_role_required('restaurant')  # Only restaurants can access this route
+def get_notifications(user_id, restaurant_id):
     """Allow only the logged-in restaurant to fetch its notifications"""
-    if session['user_id'] != restaurant_id:
+    if user_id != restaurant_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -1041,11 +1095,13 @@ def get_notifications(restaurant_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+# ✅ Fetch customer notifications (JWT-based)
 @app.route('/notifications/<int:customer_id>', methods=['GET'])
-@login_required('customer')
-def get_customer_notifications(customer_id):
+@jwt_role_required('customer')  # Only customers can access this route
+def get_customer_notifications(user_id, customer_id):
     """Allow only the logged-in customer to fetch their notifications"""
-    if session['user_id'] != customer_id:
+    if user_id != customer_id:
         return jsonify({'error': 'Unauthorized access'}), 403
 
     try:
@@ -1062,10 +1118,12 @@ def get_customer_notifications(customer_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Restaurant notification delete route
+
+
+# ✅ Delete restaurant notification (JWT-based)
 @app.route('/restaurant/notifications/<int:notification_id>', methods=['DELETE'])
-@login_required('restaurant')  # Only restaurants can delete their notifications
-def delete_restaurant_notification(notification_id):
+@jwt_role_required('restaurant')  # Only restaurants can delete their notifications
+def delete_restaurant_notification(user_id, notification_id):
     """Allow only the logged-in restaurant to delete its own notifications"""
     try:
         conn = get_db_connection()
@@ -1081,8 +1139,8 @@ def delete_restaurant_notification(notification_id):
 
         restaurant_id = notification[0]
 
-        # Authorization check: Only the assigned restaurant can delete the notification
-        if session['user_id'] != restaurant_id:
+        # 🔹 Authorization check: Only the assigned restaurant can delete the notification
+        if user_id != restaurant_id:
             conn.close()
             return jsonify({'error': 'Unauthorized access'}), 403
 
@@ -1096,10 +1154,10 @@ def delete_restaurant_notification(notification_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Customer notification delete route
+# ✅ Delete customer notification (JWT-based)
 @app.route('/customer/notifications/<int:notification_id>', methods=['DELETE'])
-@login_required('customer')  # Only customers can delete their notifications
-def delete_customer_notification(notification_id):
+@jwt_role_required('customer')  # Only customers can delete their notifications
+def delete_customer_notification(user_id, notification_id):
     """Allow only the logged-in customer to delete their own notifications"""
     try:
         conn = get_db_connection()
@@ -1115,8 +1173,8 @@ def delete_customer_notification(notification_id):
 
         customer_id = notification[0]
 
-        # Authorization check: Only the assigned customer can delete the notification
-        if session['user_id'] != customer_id:
+        # 🔹 Authorization check: Only the assigned customer can delete the notification
+        if user_id != customer_id:
             conn.close()
             return jsonify({'error': 'Unauthorized access'}), 403
 
@@ -1132,16 +1190,12 @@ def delete_customer_notification(notification_id):
 
 
 
-    # ✅ Virtual Wallet System
 
-# Get user balance
+# ✅ Get user balance (JWT-based, allows both customers & restaurants)
 @app.route('/wallet/<int:user_id>', methods=['GET'])
-@login_required()  # Requires login, allows both customers & restaurants
+@jwt_required  # Requires authentication, allows both customers & restaurants
 def get_balance(user_id):
     """Retrieve the wallet balance of the logged-in user"""
-    if session['user_id'] != user_id:
-        return jsonify({'error': 'Unauthorized access'}), 403
-
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1160,17 +1214,19 @@ def get_balance(user_id):
 
 
 
-# Process Payment (Customer to Restaurant & Platform Fee)
+
+# ✅ Process Payment (JWT-based, only customers)
 @app.route('/payment', methods=['POST'])
-def process_payment():
+@jwt_role_required('customer')  # Only customers can make payments
+def process_payment(user_id):
     """Handle payments from customer to restaurant with Lieferspatz platform fee"""
     try:
         data = request.get_json()
-        required_fields = ["customer_id", "restaurant_id", "order_id", "amount"]
+        required_fields = ["restaurant_id", "order_id", "amount"]
         if not all(field in data for field in required_fields):
             return jsonify({"error": "Missing required fields"}), 400
 
-        customer_id = data["customer_id"]
+        customer_id = user_id  # Use JWT user_id instead of relying on request payload
         restaurant_id = data["restaurant_id"]
         order_id = data["order_id"]
         total_amount = data["amount"]
@@ -1211,6 +1267,180 @@ def process_payment():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ✅ Retrieve Lieferspatz's balance (JWT-based, only for admins)
+@app.route('/lieferspatz-balance', methods=['GET'])
+@jwt_role_required('admin')  # Restrict access to admins only
+def get_lieferspatz_balance(user_id):
+    """Retrieve the total balance of Lieferspatz platform earnings"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Fetch Lieferspatz balance (Assuming ID 0 in users table represents Lieferspatz earnings)
+        cursor.execute("SELECT balance FROM users WHERE id = 0")
+        balance = cursor.fetchone()
+        conn.close()
+
+        if not balance:
+            return jsonify({'error': 'Lieferspatz balance record not found'}), 404
+
+        return jsonify({"lieferspatz_balance": balance[0]}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ✅ Customer Dashboard (JWT-based)
+@app.route('/customer-dashboard', methods=['GET'])
+@jwt_role_required('customer')  # Only customers can access their dashboard
+def customer_dashboard(user_id):
+    """Retrieve customer dashboard information including balance, active orders, and notifications"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 🔹 Fetch wallet balance
+        cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+        balance = cursor.fetchone()
+        balance = balance[0] if balance else 0.0
+
+        # 🔹 Fetch active orders (not completed or canceled)
+        cursor.execute("""
+            SELECT id, restaurant_id, status, timestamp 
+            FROM orders 
+            WHERE customer_id = ? AND status NOT IN ('Abgeschlossen', 'Storniert')
+            ORDER BY timestamp DESC
+        """, (user_id,))
+        active_orders = cursor.fetchall()
+        active_orders_list = [{
+            'order_id': order[0],
+            'restaurant_id': order[1],
+            'status': order[2],
+            'timestamp': order[3]
+        } for order in active_orders]
+
+        # 🔹 Fetch order history (completed orders)
+        cursor.execute("""
+            SELECT id, restaurant_id, status, timestamp 
+            FROM orders 
+            WHERE customer_id = ? AND status = 'Abgeschlossen'
+            ORDER BY timestamp DESC
+        """, (user_id,))
+        order_history = cursor.fetchall()
+        order_history_list = [{
+            'order_id': order[0],
+            'restaurant_id': order[1],
+            'status': order[2],
+            'timestamp': order[3]
+        } for order in order_history]
+
+        # 🔹 Fetch unread notifications
+        cursor.execute("""
+            SELECT id, message, timestamp FROM notifications 
+            WHERE customer_id = ? AND read_status = 0
+            ORDER BY timestamp DESC
+        """, (user_id,))
+        notifications = cursor.fetchall()
+        notifications_list = [{
+            'notification_id': n[0],
+            'message': n[1],
+            'timestamp': n[2]
+        } for n in notifications]
+
+        conn.close()
+
+        # ✅ Return the customer dashboard summary
+        return jsonify({
+            "balance": balance,
+            "active_orders": active_orders_list,
+            "order_history": order_history_list,
+            "notifications": notifications_list
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ✅ Restaurant Dashboard (JWT-based)
+@app.route('/restaurant-dashboard', methods=['GET'])
+@jwt_role_required('restaurant')  # Only restaurants can access their dashboard
+def restaurant_dashboard(user_id):
+    """Retrieve restaurant dashboard information including balance, active orders, and notifications"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 🔹 Fetch wallet balance
+        cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+        balance = cursor.fetchone()
+        balance = balance[0] if balance else 0.0
+
+        # 🔹 Fetch active orders (orders not completed or canceled)
+        cursor.execute("""
+            SELECT id, customer_id, status, timestamp 
+            FROM orders 
+            WHERE restaurant_id = ? AND status NOT IN ('Abgeschlossen', 'Storniert')
+            ORDER BY timestamp DESC
+        """, (user_id,))
+        active_orders = cursor.fetchall()
+        active_orders_list = [{
+            'order_id': order[0],
+            'customer_id': order[1],
+            'status': order[2],
+            'timestamp': order[3]
+        } for order in active_orders]
+
+        # 🔹 Fetch order history (completed orders)
+        cursor.execute("""
+            SELECT id, customer_id, status, timestamp 
+            FROM orders 
+            WHERE restaurant_id = ? AND status = 'Abgeschlossen'
+            ORDER BY timestamp DESC
+        """, (user_id,))
+        order_history = cursor.fetchall()
+        order_history_list = [{
+            'order_id': order[0],
+            'customer_id': order[1],
+            'status': order[2],
+            'timestamp': order[3]
+        } for order in order_history]
+
+        # 🔹 Fetch unread notifications
+        cursor.execute("""
+            SELECT id, message, timestamp FROM notifications 
+            WHERE restaurant_id = ? AND read_status = 0
+            ORDER BY timestamp DESC
+        """, (user_id,))
+        notifications = cursor.fetchall()
+        notifications_list = [{
+            'notification_id': n[0],
+            'message': n[1],
+            'timestamp': n[2]
+        } for n in notifications]
+
+        # 🔹 Fetch menu overview
+        cursor.execute("""
+            SELECT id, name, price FROM menu_items WHERE restaurant_id = ?
+        """, (user_id,))
+        menu_items = cursor.fetchall()
+        menu_list = [{
+            'menu_item_id': item[0],
+            'name': item[1],
+            'price': item[2]
+        } for item in menu_items]
+
+        conn.close()
+
+        # ✅ Return the restaurant dashboard summary
+        return jsonify({
+            "balance": balance,
+            "active_orders": active_orders_list,
+            "order_history": order_history_list,
+            "notifications": notifications_list,
+            "menu": menu_list
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 

@@ -75,16 +75,12 @@ const RestaurantNavbar = () => {
                         </ul>
                     </div>
                     <div className="flex">
-                        <div className="cart"><img src={cartIcon} alt="" onClick={() => { setShowCart(curr => !curr) }} />
-                            {showCart && cart.map(({ item_id, name, price, quantity }) => <div className="flex" key={item_id}>
-                                <span>{name}</span> <span>{price}</span> <span>{quantity}</span>  <span>{price * quantity}</span>
-                            </div>)}
-                        </div>
                         <div className="notifications"><img src={notificationsIcon} alt="" onClick={() => { setShowNotifications(curr => !curr) }} />
-                            {showNotifications && notifications.map(({ message, id, timestamp }) => <div key={id}>
-                                <span>{message}</span>
-                                <span>{timestamp}</span>
-                            </div>)}
+                            {showNotifications && <ul className="flex-vertical">
+                                {notifications.map(({ message, id, timestamp }) => <li key={id}>
+                                    <span>{message}</span>
+                                    <span>{timestamp}</span>
+                                </li>)}</ul>}
                         </div>
                         <div className="balance">
                             {/* not working yet */}

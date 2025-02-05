@@ -29,18 +29,22 @@ const CustomerDashboard = () => {
     'zip_code': "123456"
   }
   const getCustomerOrders = async () => {
-    const res = await fetch("http://127.0.0.1:5000/orders/history/1", {
-      method: "GET",
-      credentials: "include"
-    })
-    console.log(res)
-    const orders = await res.json()
-    console.log(orders)
+    try {
+      const res = await fetch("http://127.0.0.1:5000/orders/history/1", {
+        method: "GET",
+        credentials: "include"
+      })
+      console.log(res)
+      const orders = await res.json()
+      console.log(orders)
+    } catch (error) { console.log(error) }
   }
   const getWalletBalance = async () => {
-    const res = await fetch(`http://localhost:5000/wallet/customer/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
-    const data = await res.json()
-    console.log(data)
+    try {
+      const res = await fetch(`http://localhost:5000/wallet/customer/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
+      const data = await res.json()
+      console.log(data)
+    } catch (error) { console.log(error) }
   }
 
   const getUserProfile = async () => {

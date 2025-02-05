@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import cartIcon from './../../assets/icons/ShoppingCart.svg'
 import notificationsIcon from './../../assets/icons/BookmarksSimple.svg'
+import { useCart } from './../context/CartContext'
 import './scss/navbar.css'
 function CustomerNavbar() {
+    const { cart, addToCart, removeFromCart, updateQuantity, clearCart, getTotalPrice } = useCart()
     const navigate = useNavigate()
     const [inputValue, setInputValue] = useState("");
     const [restaurants, setRestaurants] = useState([
@@ -22,13 +24,7 @@ function CustomerNavbar() {
             { "id": 3, "message": "notifications message 1", "timestamp": "12-11-2025" },
         ]
     )
-    const [cart, setCart] = useState(
-        [
-            { 'item_id': 123, 'name': ' item[1]', 'price': 55, 'quantity': 2 },
-            { 'item_id': 12343, 'name': ' item[1]', 'price': 55, 'quantity': 2 },
-            { 'item_id': 1243, 'name': ' item[1]', 'price': 55, 'quantity': 2 },
-            { 'item_id': 1523, 'name': ' item[1]', 'price': 55, 'quantity': 2 },
-        ])
+
     const user = { zip_code: 123 }
     const searchRestaurants = (value) => {
         const filtered = restaurants.filter(restaurant =>
@@ -60,14 +56,7 @@ function CustomerNavbar() {
         }
     }
 
-    const getCartItems = async () => {
-        try {
-            const res = await fetch(`http://localhost:5000/cart/${localStorage.getItem("Customer_ID")}`)
-            const cartItems = res.json()
-            console.log("cart Items:", cartItems)
-            setCart(cartItems)
-        } catch (error) { console.log(error) }
-    }
+
     const chooseRestaurant = (id) => {
         navigate(`/restaurant/${id}/menu`)
         setInputValue("")
@@ -111,8 +100,10 @@ function CustomerNavbar() {
                             <img src={cartIcon} alt="" onClick={() => { setShowCart(curr => !curr) }} />
                             {showCart && <ul className="flex-vertical" >
                                 {cart.map(({ item_id, name, price, quantity }) => <li key={item_id}>
-                                    <span>{name}</span> <span>{price}</span> <span>{quantity}</span>  <span>{price * quantity}</span>
+                                    <span>{name}</span> $<span>{price}</span> * <span>{quantity}</span> {`=>`} $<span>{price * quantity}</span>
                                 </li>)}
+                                <div>Total Balance : ${getTotalPrice().toFixed(2)}</div>
+                                <div className="flex" ><button className="btn btn-danger" onClick={() => { clearCart() }}>Empty Cart</button> <button className="btn btn-success">CheckOut</button></div>
                             </ul>}
                         </div>
                         <div className="notifications"><img src={notificationsIcon} alt="" onClick={() => { setShowNotifications(curr => !curr) }} />

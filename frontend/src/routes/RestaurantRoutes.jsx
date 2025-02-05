@@ -12,10 +12,7 @@ const RestaurantRoutes = () => {
     return (
         <Routes>
             <Route element={<ProtectedRoutesCustomer allowedTypes={["Restaurant"]} />}>
-                <Route
-                    path="/restaurant-dashboard"
-                    element={<RestaurantDashboard />}
-                />
+                <Route path="/restaurant-dashboard" element={<RestaurantDashboard />} />
                 <Route path='/restaurant-menu' element={<RestaurantMenu />} />
                 <Route path='/restaurant-orders' element={<RestaurantPendingOrders />} />
                 <Route path='/restaurant-orders-history' element={<RestaurantOrderHistory />} />

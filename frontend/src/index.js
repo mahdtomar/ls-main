@@ -7,10 +7,12 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import "./index.css";
 import { BrowserRouter } from "react-router-dom";
-
+import { CartProvider } from "./Components/context/CartContext";
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
     <BrowserRouter>
-        <App />
+        <CartProvider>
+            <App />
+        </CartProvider>
     </BrowserRouter>
 );

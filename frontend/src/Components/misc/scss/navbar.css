@@ -54,12 +54,16 @@ nav .cart ul {
 }
 nav .cart ul li {
   cursor: pointer;
-  width: 200px;
+  width: 250px;
   padding: 5px 2px;
   transition: background-color 0.3s ease-in-out;
 }
 nav .cart ul li:hover {
   background-color: #eee;
+}
+nav .cart ul div {
+  width: 250px;
+  padding: 0px 10px;
 }
 nav .notifications {
   position: relative;
