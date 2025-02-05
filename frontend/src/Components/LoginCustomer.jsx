@@ -34,6 +34,7 @@ export default function LoginCustomer() {
       if (result.success) {
         alert("Login successful!");
         localStorage.setItem("Customer_ID", JSON.stringify(result.customer_id))
+        localStorage.setItem("User_Type", JSON.stringify("Customer"))
         console.log("Customer ID:", result.customer_id);
         navigate("/customer-dashboard"); // Navigate to Customer Dashboard
       } else {

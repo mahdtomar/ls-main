@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import cartIcon from './../../assets/icons/ShoppingCart.svg'
 import notificationsIcon from './../../assets/icons/BookmarksSimple.svg'
 import './scss/navbar.css'
 function CustomerNavbar() {
+    const navigate = useNavigate()
     const [inputValue, setInputValue] = useState("");
     const [restaurants, setRestaurants] = useState([
         { id: 1, title: "Pizza Palace", zip_code: 123467 },
@@ -67,7 +68,17 @@ function CustomerNavbar() {
             setCart(cartItems)
         } catch (error) { console.log(error) }
     }
+    const handleLogout = async () => {
+        try {
+            const res = await fetch("http://localhost:5000/logout", { method: "POST", credentials: "include" })
+            const data = await res.json()
+            if (res.ok) {
+                navigate("/")
+            }
+            console.log(data)
 
+        } catch (err) { console.log("error loggging out", err) }
+    }
     useEffect(() => {
         // getAvailableRestaurants();
         // getCustomerNotification();
@@ -78,53 +89,58 @@ function CustomerNavbar() {
         // }, (5000));
         // return () => clearInterval(callingNotifications)
     }, [])
+    const userType = JSON.parse(localStorage.getItem("User_Type"))
+    console.log(userType)
     return (
-        <nav >
-            <div className="container flex">
-                <div className="flex">
-                    <div className="logo">Lieferspatz</div>
-                    <ul className="flex">
-                        <Link to={'/customer-dashboard'}>Home</Link>
-                        <Link>My Orders</Link>
-                    </ul>
+        <>
+            {userType === "Customer" && <nav >
+                <div className="container flex">
+                    <div className="flex">
+                        <div className="logo">Lieferspatz</div>
+                        <ul className="flex">
+                            <Link to={'/customer-dashboard'}>Home</Link>
+                            <Link to={'/customer-orders'}>My Orders</Link>
+                        </ul>
+                    </div>
+                    <div className="flex">
+                        <div className="cart"><img src={cartIcon} alt="" onClick={() => { setShowCart(curr => !curr) }} />
+                            {showCart && cart.map(({ item_id, name, price, quantity }) => <div className="flex" key={item_id}>
+                                <span>{name}</span> <span>{price}</span> <span>{quantity}</span>  <span>{price * quantity}</span>
+                            </div>)}
+                        </div>
+                        <div className="notifications"><img src={notificationsIcon} alt="" onClick={() => { setShowNotifications(curr => !curr) }} />
+                            {showNotifications && notifications.map(({ message, id, timestamp }) => <div key={id}>
+                                <span>{message}</span>
+                                <span>{timestamp}</span>
+                            </div>)}
+                        </div>
+                        <div className="balance">
+                            {/* not working yet */}
+                            $0
+                        </div>
+                        <div className="search">
+                            <input
+                                type="text"
+                                value={inputValue}
+                                onChange={(e) => {
+                                    setInputValue(e.target.value);
+                                    searchRestaurants(e.target.value);
+                                }}
+                                placeholder="Search restaurants by ZIP code..."
+                            />
+                        </div>
+                        <button className="btn btn-danger" onClick={handleLogout}>Logout</button>
+                    </div>
+                    {matchingRestaurants.length > 0 && inputValue !== "" && (
+                        <ul className="search-results">
+                            {matchingRestaurants.map((restaurant) => (
+                                <li key={restaurant.id}>{restaurant.title}</li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
-                <div className="flex">
-                    <div className="cart"><img src={cartIcon} alt="" onClick={() => { setShowCart(curr => !curr) }} />
-                        {showCart && cart.map(({ item_id, name, price, quantity }) => <div className="flex" key={item_id}>
-                            <span>{name}</span> <span>{price}</span> <span>{quantity}</span>  <span>{price * quantity}</span>
-                        </div>)}
-                    </div>
-                    <div className="notifications"><img src={notificationsIcon} alt="" onClick={() => { setShowNotifications(curr => !curr) }} />
-                        {showNotifications && notifications.map(({ message, id, timestamp }) => <div key={id}>
-                            <span>{message}</span>
-                            <span>{timestamp}</span>
-                        </div>)}
-                    </div>
-                    <div className="balance">
-                        {/* not working yet */}
-                        $0
-                    </div>
-                    <div className="search">
-                        <input
-                            type="text"
-                            value={inputValue}
-                            onChange={(e) => {
-                                setInputValue(e.target.value);
-                                searchRestaurants(e.target.value);
-                            }}
-                            placeholder="Search restaurants by ZIP code..."
-                        />
-                    </div>
-                </div>
-                {matchingRestaurants.length > 0 && inputValue !== "" && (
-                    <ul className="search-results">
-                        {matchingRestaurants.map((restaurant) => (
-                            <li key={restaurant.id}>{restaurant.title}</li>
-                        ))}
-                    </ul>
-                )}
-            </div>
-        </nav>
+            </nav>}
+        </>
     );
 }
 

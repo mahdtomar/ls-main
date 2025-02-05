@@ -2,10 +2,13 @@ import React, { useEffect, useState } from 'react'
 import RestaurantMenuItem from './RestaurantMenuItem'
 import MenuItemForm from './MenuItemForm';
 import './scss/restaurantMenu.css'
+import { useParams } from 'react-router-dom';
 const RestaurantMenu = () => {
     const [menu, setMenu] = useState([]);
     const [item, setItem] = useState({})
     const [showMenuForm, setShowMenuForm] = useState(false)
+    const { id } = useParams()
+    console.log(id)
     const getRestaurantMenu = async () => {
         const res = await fetch("http://localhost:5000/restaurant/1/menu", { method: "GET" })
         const data = await res.json()

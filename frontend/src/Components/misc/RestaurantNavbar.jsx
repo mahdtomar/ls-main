@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import cartIcon from './../../assets/icons/ShoppingCart.svg'
 import notificationsIcon from './../../assets/icons/BookmarksSimple.svg'
 
 const RestaurantNavbar = () => {
     const [showNotifications, setShowNotifications] = useState(false)
     const [showCart, setShowCart] = useState(false)
+    const navigate = useNavigate()
     const [notifications, setNotifications] = useState(
         [
             { "id": 1, "message": "notifications message 1", "timestamp": "12-11-2025" },
@@ -30,7 +31,17 @@ const RestaurantNavbar = () => {
             console.log(error)
         }
     }
+    const handleLogout = async () => {
+        try {
+            const res = await fetch("http://localhost:5000/logout", { method: "POST", credentials: "include" })
+            const data = await res.json()
+            if (res.ok) {
+                navigate("/")
+            }
+            console.log(data)
 
+        } catch (err) { console.log("error loggging out", err) }
+    }
     const getCartItems = async () => {
         try {
             const res = await fetch(`http://localhost:5000/cart/${localStorage.getItem("Customer_ID")}`)
@@ -49,37 +60,42 @@ const RestaurantNavbar = () => {
         // }, (5000));
         // return () => clearInterval(callingNotifications)
     }, [])
+    const userType = JSON.parse(localStorage.getItem("User_Type"))
     return (
-        <nav >
-            <div className="container flex">
-                <div className="flex">
-                    <div className="logo">Lieferspatz</div>
-                    <ul className="flex">
-                        <Link to={'/restaurant-dashboard'}>Home</Link>
-                        <Link to={'/restaurant-orders'}>Orders</Link>
-                        <Link to={'/restaurant-menu'}>Menu</Link>
-                        <Link to={`/restaurant-orders-history`}>Order History</Link>
-                    </ul>
+        <>
+            {userType === "Restaurant" && <nav >
+                <div className="container flex">
+                    <div className="flex">
+                        <div className="logo">Lieferspatz</div>
+                        <ul className="flex">
+                            <Link to={'/restaurant-dashboard'}>Home</Link>
+                            <Link to={'/restaurant-orders'}>Orders</Link>
+                            <Link to={'/restaurant-menu'}>Menu</Link>
+                            <Link to={`/restaurant-orders-history`}>Order History</Link>
+                        </ul>
+                    </div>
+                    <div className="flex">
+                        <div className="cart"><img src={cartIcon} alt="" onClick={() => { setShowCart(curr => !curr) }} />
+                            {showCart && cart.map(({ item_id, name, price, quantity }) => <div className="flex" key={item_id}>
+                                <span>{name}</span> <span>{price}</span> <span>{quantity}</span>  <span>{price * quantity}</span>
+                            </div>)}
+                        </div>
+                        <div className="notifications"><img src={notificationsIcon} alt="" onClick={() => { setShowNotifications(curr => !curr) }} />
+                            {showNotifications && notifications.map(({ message, id, timestamp }) => <div key={id}>
+                                <span>{message}</span>
+                                <span>{timestamp}</span>
+                            </div>)}
+                        </div>
+                        <div className="balance">
+                            {/* not working yet */}
+                            $0
+                        </div>
+                        <button className="btn btn-danger" onClick={handleLogout}>Logout</button>
+
+                    </div>
                 </div>
-                <div className="flex">
-                    <div className="cart"><img src={cartIcon} alt="" onClick={() => { setShowCart(curr => !curr) }} />
-                        {showCart && cart.map(({ item_id, name, price, quantity }) => <div className="flex" key={item_id}>
-                            <span>{name}</span> <span>{price}</span> <span>{quantity}</span>  <span>{price * quantity}</span>
-                        </div>)}
-                    </div>
-                    <div className="notifications"><img src={notificationsIcon} alt="" onClick={() => { setShowNotifications(curr => !curr) }} />
-                        {showNotifications && notifications.map(({ message, id, timestamp }) => <div key={id}>
-                            <span>{message}</span>
-                            <span>{timestamp}</span>
-                        </div>)}
-                    </div>
-                    <div className="balance">
-                        {/* not working yet */}
-                        $0
-                    </div>
-                </div>
-            </div>
-        </nav>
+            </nav>}
+        </>
     )
 }
 

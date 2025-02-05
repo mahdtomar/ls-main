@@ -101,7 +101,6 @@ const CustomerDashboard = () => {
           {/* Logout Button */}
           <div>
             <h5 className="text-success">✔ Logout Button</h5>
-            <button className="btn btn-danger">Logout</button>
           </div>
         </div>
       </div>

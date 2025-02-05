@@ -1,12 +1,23 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function LoginRestaurant() {
+  const navigate = useNavigate()
   const handleSubmit = async () => {
-    const res = await fetch("http://localhost:5000/restaurant/login", {
-      method: "POST",
-      credentials: "include",
-      body: JSON.stringify({})
-    })
+    try {
+      const res = await fetch("http://localhost:5000/restaurant/login", {
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({})
+      })
+      const data = res.json()
+      localStorage.setItem("User_Type", JSON.stringify("Restaurant"))
+
+      if (res.ok) {
+        navigate("/restaurant-dashboard")
+      }
+      console.log(data)
+    } catch (error) { console.log("error") }
   }
   return (
     <div className="d-flex justify-content-center align-items-center vh-100">
@@ -40,7 +51,7 @@ export default function LoginRestaurant() {
           </div>
 
           {/* Submit Button */}
-          <button type="submit" className="btn btn-primary w-100">
+          <button type="submit" className="btn btn-primary w-100" onClick={handleSubmit}>
             Login
           </button>
         </form>
