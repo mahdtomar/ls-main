@@ -15,7 +15,7 @@ export const CartProvider = ({ children }) => {
     ]);
     const getCartItems = async () => {
         try {
-            const res = await fetch(`http://localhost:5000/cart/${localStorage.getItem("Customer_ID")}`)
+            const res = await fetch(`http://localhost:5001/cart/${localStorage.getItem("Customer_ID")}`)
             const cartItems = res.json()
             console.log("cart Items:", cartItems)
             setCart(cartItems)

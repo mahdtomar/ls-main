@@ -1,7 +1,9 @@
 import React, { useEffect } from "react";
 import CustomerOrderLine from "./OrderLine";
+import { useNavigate } from "react-router-dom";
 
 const CustomerDashboard = () => {
+  const navigate = useNavigate()
   const orders = [
     {
       "order_id": 1,
@@ -41,7 +43,7 @@ const CustomerDashboard = () => {
   }
   const getWalletBalance = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/wallet/customer/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
+      const res = await fetch(`http://localhost:5001/wallet/customer/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
       const data = await res.json()
       console.log(data)
     } catch (error) { console.log(error) }
@@ -49,14 +51,14 @@ const CustomerDashboard = () => {
 
   const getUserProfile = async () => {
     try {
-      const res = await fetch("http://localhost:5000/customer/3/profile", { credentials: "include", method: "GET" })
+      const res = await fetch("http://localhost:5001/customer/3/profile", { credentials: "include", method: "GET" })
       const data = await res.json()
       console.log("user profile", data)
     } catch (error) { console.log(error) }
   }
   const checkSession = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/session`, {
+      const res = await fetch(`http://localhost:5001/session`, {
         method: "GET",
         credentials: "include",
       })
@@ -65,6 +67,17 @@ const CustomerDashboard = () => {
     } catch (err) {
       console.log(err)
     }
+  }
+  const handleLogout = async () => {
+    try {
+      const res = await fetch("http://localhost:5001/logout", { method: "POST", credentials: "include" })
+      const data = await res.json()
+      if (res.ok) {
+        navigate("/")
+      }
+      console.log(data)
+
+    } catch (err) { console.log("error loggging out", err) }
   }
   useEffect(() => { getCustomerOrders(); getWalletBalance(); checkSession(); getUserProfile() }, [])
   return (
@@ -105,6 +118,7 @@ const CustomerDashboard = () => {
           {/* Logout Button */}
           <div>
             <h5 className="text-success">✔ Logout Button</h5>
+            <button className="btn btn-danger" onClick={handleLogout}>Logout</button>
           </div>
         </div>
       </div>

@@ -5,7 +5,7 @@ export default function LoginRestaurant() {
   const navigate = useNavigate()
   const handleSubmit = async () => {
     try {
-      const res = await fetch("http://localhost:5000/restaurant/login", {
+      const res = await fetch("http://localhost:5001/restaurant/login", {
         method: "POST",
         credentials: "include",
         body: JSON.stringify({})

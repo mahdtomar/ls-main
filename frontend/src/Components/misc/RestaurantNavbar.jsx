@@ -23,7 +23,7 @@ const RestaurantNavbar = () => {
         ])
     const getCustomerNotification = async () => {
         try {
-            const res = await fetch(`http://localhost:5000/notifications/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
+            const res = await fetch(`http://localhost:5001/notifications/${localStorage.getItem("Customer_ID")}`, { method: "GET", credentials: "include" })
             const data = await res.json()
             console.log("customer notifications : ", data)
             setNotifications(data)
@@ -31,20 +31,10 @@ const RestaurantNavbar = () => {
             console.log(error)
         }
     }
-    const handleLogout = async () => {
-        try {
-            const res = await fetch("http://localhost:5000/logout", { method: "POST", credentials: "include" })
-            const data = await res.json()
-            if (res.ok) {
-                navigate("/")
-            }
-            console.log(data)
 
-        } catch (err) { console.log("error loggging out", err) }
-    }
     const getCartItems = async () => {
         try {
-            const res = await fetch(`http://localhost:5000/cart/${localStorage.getItem("Customer_ID")}`)
+            const res = await fetch(`http://localhost:5001/cart/${localStorage.getItem("Customer_ID")}`)
             const cartItems = res.json()
             console.log("cart Items:", cartItems)
             setCart(cartItems)
@@ -86,7 +76,7 @@ const RestaurantNavbar = () => {
                             {/* not working yet */}
                             $0
                         </div>
-                        <button className="btn btn-danger" onClick={handleLogout}>Logout</button>
+                        {/* <button className="btn btn-danger" onClick={handleLogout}>Logout</button> */}
 
                     </div>
                 </div>

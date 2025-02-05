@@ -8,7 +8,7 @@ const CustomerRestaurantMenu = () => {
   const { addToCart } = useCart()
   const getRestaurantMenu = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/restaurant/${id}/menu`, { method: "GET" })
+      const res = await fetch(`http://localhost:5001/restaurant/${id}/menu`, { method: "GET" })
       const data = await res.json()
       console.log(data)
       setMenu(data)
@@ -16,7 +16,7 @@ const CustomerRestaurantMenu = () => {
   }
   useEffect(() => {
     getRestaurantMenu()
-  },[])
+  }, [])
   return (
     <div>
       <h2>Restarurant Menu</h2>
